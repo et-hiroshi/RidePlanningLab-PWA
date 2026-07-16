@@ -10,10 +10,10 @@
     "artifacts/ride_planning_runtime_v1.json": "5959e1a3c6298925d196845593139ba6b7b55e841b0e960ed27cc022d90afbe2",
     "icon-192.png": "7e8a7583bb1e8faefd5bb872eaaffae4cdfc0c916a9df093ad02b50ea7c73210",
     "icon-512.png": "c95cf26b50ab435ef691145c96721bba7d767a42e0a0bf71ebbb14c696842dcf",
-    "index.html": "3241a42c1c168af6e446cee591863ab666453ff368b34f1c3cbd44092f2b6db7",
+    "index.html": "472e9fcd145316c097f5476ff84206ee2f587f8b68306765eafe74042c811f27",
     "manifest.webmanifest": "d21a2b145385c824d070c4b3f559e042d9b5950af725fed39db8e7696626301f",
     "runtime/ride_planning_runtime.js": "6ff60f3420e07c450bd36ecd0f505d3746316ff6a0430537cad0ba04b86511af",
-    "service-worker.js": "3170de51bdfd2aa45b0e6464eed2866c7b8cca4a345885cfd2a13b4ede64fdca",
+    "service-worker.js": "7f6bd4ccdd9dc7bf6fcb0c92189b632ff727882f5792ac49244d63ef1d336bad",
     "style.css": "6216313b94eb574e6b07bb4af040596e1970b0982c4e3cb306d88a92a2418594"
   },
   "runtime_version": "mobile-ride-planning-portable-runtime-v1"
