@@ -1,0 +1,36 @@
+name: Deploy audited Ride Planning Lab bundle
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: ride-planning-lab-pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Stage only the audited static bundle
+        run: |
+          mkdir -p _site/artifacts _site/runtime
+          cp .nojekyll _headers app.js apple-touch-icon.png bundle-metadata.json icon-192.png icon-512.png index.html manifest.webmanifest service-worker.js style.css _site/
+          cp artifacts/ride_planning_runtime_v1.json _site/artifacts/
+          cp runtime/ride_planning_runtime.js _site/runtime/
+          test "$(find _site -type f | wc -l)" -eq 13
+          ! grep -R -i -E 'garmin|google-site-verification|https?://' _site
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
