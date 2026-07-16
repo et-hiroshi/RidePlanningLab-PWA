@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; worker-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'self'">
+<meta name="description" content="A personal cycling ride-planning tool that estimates ride duration and reachable distance from aggregated historical ride data.">
+<meta name="application-name" content="Ride Planning Lab"><meta name="apple-mobile-web-app-title" content="Ride Plan Lab">
+<meta name="theme-color" content="#0d4d31"><link rel="manifest" href="./manifest.webmanifest"><link rel="icon" href="./icon-192.png"><link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<link rel="stylesheet" href="./style.css"><title>Ride Planning Lab</title></head>
+<body><header><h1>Ride Planning Lab</h1><span>Cycling Ride Planning Prototype</span></header><main>
+<nav class="mode-nav" aria-label="計算方法"><button data-mode="destination" class="active">目的地までの時間</button><button data-mode="distance">使える時間から距離</button></nav>
+<div id="fatal" class="error hidden" role="alert"></div>
+<section id="destination-view"><section class="panel input-panel"><h1 class="visually-hidden">目的地までの時間を調べる</h1><form id="destination-form">
+<div class="basic-inputs"><label>往復距離（km）<input name="distance_km" value="140" type="number" min="0" step="0.1" inputmode="decimal" required></label><label>出発時刻<input name="departure_time" value="08:00" type="time" required></label></div>
+<strong class="quick-label">出発時刻のクイック選択</strong><div class="presets"><button class="current-time" type="button">◷ 現在時刻</button><button type="button" data-time="05:00">05:00</button><button type="button" data-time="08:00">08:00</button></div>
+<fieldset class="events"><legend>予定イベント（任意）</legend><p>実施するイベントだけチェックしてください。</p><div data-events></div></fieldset>
+<button class="primary" type="submit"><span aria-hidden="true">▦</span> 計算する</button></form></section><div id="destination-result"></div></section>
+<section id="distance-view" class="hidden"><section class="panel input-panel"><h1 class="visually-hidden">使える時間から距離を調べる</h1><form id="distance-form">
+<div class="basic-inputs"><label>出発時刻<input name="departure_time" value="08:00" type="time" required></label><label>帰宅期限<input name="deadline_time" value="17:00" type="time" required></label></div>
+<strong class="quick-label">出発時刻のクイック選択</strong><div class="presets"><button class="current-time" type="button">◷ 現在時刻</button><button type="button" data-time="05:00">05:00</button><button type="button" data-time="08:00">08:00</button></div>
+<fieldset class="events"><legend>予定イベント（任意）</legend><p>実施するイベントだけチェックしてください。</p><div data-events></div></fieldset>
+<button class="primary" type="submit"><span aria-hidden="true">▦</span> 計算する</button></form></section><div id="distance-result"></div></section>
+<aside class="notice">過去の実績に基づく予測です。条件により結果は変動します。</aside>
+<aside class="about"><strong>このツールについて</strong><p>Ride Planning Labは個人用のサイクリング計画ツールです。距離、時刻、イベント時間だけを端末内で計算し、ログインや個人情報の入力は不要です。入力内容を外部へ送信しません。予測結果は過去の実績に基づく目安であり、帰宅時刻や安全を保証するものではありません。</p></aside></main>
+<footer><strong>Prototype Candidate</strong> — Operational予測・安全側予測・帰宅保証ではありません。</footer><script type="module" src="./app.js"></script></body></html>

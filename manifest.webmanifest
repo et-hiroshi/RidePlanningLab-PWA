@@ -1,0 +1,15 @@
+{
+  "id": "./",
+  "name": "Ride Planning Lab",
+  "short_name": "Ride Plan Lab",
+  "description": "A personal cycling ride-planning tool that estimates ride duration and reachable distance from aggregated historical ride data.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f5f7f4",
+  "theme_color": "#0d4d31",
+  "icons": [
+    {"src":"./icon-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},
+    {"src":"./icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}
+  ]
+}

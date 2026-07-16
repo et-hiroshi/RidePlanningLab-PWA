@@ -1,0 +1,92 @@
+{
+  "limitation_codes": [
+    "150_km_band_uses_pooled_100_km_and_over",
+    "long_distance_interval_not_safety_calibrated",
+    "p10_p90_not_calibrated_prediction_interval",
+    "prototype_candidate_not_operational",
+    "r015_planned_event_is_retrospective_oracle_proxy",
+    "residual_target_is_not_pure_natural_stop"
+  ],
+  "moving": {
+    "median_sec_per_km": 172.76559200337886
+  },
+  "product_identity": "ride-planning-lab",
+  "prototype_status": "prototype_candidate_not_operational",
+  "residual": {
+    "intercept_sec": -314.10440904088864,
+    "long_distance_warning_km": 150.0,
+    "minimum_prediction_sec": 0.0,
+    "slope_sec_per_km": 64.67643474134016,
+    "valid_distance_policy": "finite_nonnegative_no_product_maximum"
+  },
+  "runtime_version": "mobile-ride-planning-portable-runtime-v1",
+  "schema_version": "mobile-ride-planning-runtime-artifact-v1",
+  "solver": {
+    "maximum_iterations": 80,
+    "tolerance_km": 0.001,
+    "upper_bound_km": 500.0
+  },
+  "source_identity": {
+    "moving_dataset": "sha256:c9bdf3b3fb1998caa0ff09ac455325bb79d6398a65ed38bcf3c58e1385ab0293",
+    "moving_estimator_version": "historical-median-moving-sec-per-km-v1",
+    "moving_schema_version": "ride-planning-moving-artifact-v1",
+    "residual_artifact_version": "residual-ols-run2-677-v1",
+    "residual_dataset": "sha256:9be24d77a03c5146402ed51e026c399172a2c866414e612297f50ec9e938929c",
+    "residual_schema_version": "residual-ols-prototype-artifact-v1",
+    "uncertainty_artifact_version": "residual-uncertainty-run2-walk-forward-v1",
+    "uncertainty_schema_version": "residual-uncertainty-prototype-artifact-v1"
+  },
+  "uncertainty": {
+    "bands": [
+      {
+        "error_p10_sec": -575.4684651072256,
+        "error_p90_sec": 877.2773396642027,
+        "fallback_source": "distance_band",
+        "lower_km": 0,
+        "name": "under_30_km",
+        "sample_count": 407,
+        "upper_km": 30
+      },
+      {
+        "error_p10_sec": -1345.3150996847842,
+        "error_p90_sec": 942.59592524156,
+        "fallback_source": "distance_band",
+        "lower_km": 30,
+        "name": "30_to_60_km",
+        "sample_count": 106,
+        "upper_km": 60
+      },
+      {
+        "error_p10_sec": -1852.0949315972896,
+        "error_p90_sec": 2674.169663498779,
+        "fallback_source": "distance_band",
+        "lower_km": 60,
+        "name": "60_to_100_km",
+        "sample_count": 82,
+        "upper_km": 100
+      },
+      {
+        "error_p10_sec": -2910.3354564178608,
+        "error_p90_sec": 3333.7459495319363,
+        "fallback_source": "distance_band",
+        "lower_km": 100,
+        "name": "100_to_150_km",
+        "sample_count": 41,
+        "upper_km": 150
+      },
+      {
+        "error_p10_sec": -4028.8628046133913,
+        "error_p90_sec": 3230.9929964662906,
+        "fallback_source": "pooled_100_km_and_over",
+        "lower_km": 150,
+        "name": "150_km_and_over",
+        "sample_count": 11,
+        "upper_km": null
+      }
+    ],
+    "quantile_levels": [
+      0.1,
+      0.9
+    ]
+  }
+}

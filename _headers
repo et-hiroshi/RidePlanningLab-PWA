@@ -1,0 +1,14 @@
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; worker-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+  X-Frame-Options: DENY
+
+/index.html
+  Cache-Control: no-cache, max-age=0, must-revalidate
+
+/service-worker.js
+  Cache-Control: no-cache, max-age=0, must-revalidate
+
+/artifacts/*
+  Cache-Control: no-cache, max-age=0, must-revalidate

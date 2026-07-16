@@ -1,0 +1,20 @@
+{
+  "app_identity": "ride-planning-lab",
+  "app_name": "Ride Planning Lab",
+  "bundle_schema": "ride-planning-lab-pwa-bundle-v1",
+  "files": {
+    ".nojekyll": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "_headers": "9aef9259b0745e6c31aba97bc1fd59aed0345776afcf9e05f313eb2caf05ac93",
+    "app.js": "355242e4ea652fb65fb5f25386eddd790b55359a550cd683de0deb4207253251",
+    "apple-touch-icon.png": "5258abe2d7a64afdc6b40626c6ce6c7730eda06791c329bb6ccbce701348f341",
+    "artifacts/ride_planning_runtime_v1.json": "5959e1a3c6298925d196845593139ba6b7b55e841b0e960ed27cc022d90afbe2",
+    "icon-192.png": "7e8a7583bb1e8faefd5bb872eaaffae4cdfc0c916a9df093ad02b50ea7c73210",
+    "icon-512.png": "c95cf26b50ab435ef691145c96721bba7d767a42e0a0bf71ebbb14c696842dcf",
+    "index.html": "3241a42c1c168af6e446cee591863ab666453ff368b34f1c3cbd44092f2b6db7",
+    "manifest.webmanifest": "d21a2b145385c824d070c4b3f559e042d9b5950af725fed39db8e7696626301f",
+    "runtime/ride_planning_runtime.js": "6ff60f3420e07c450bd36ecd0f505d3746316ff6a0430537cad0ba04b86511af",
+    "service-worker.js": "d2eae7d7ac5241662c12ce331f6a3b04b979f36d514953472fbaa4f16e082f19",
+    "style.css": "6216313b94eb574e6b07bb4af040596e1970b0982c4e3cb306d88a92a2418594"
+  },
+  "runtime_version": "mobile-ride-planning-portable-runtime-v1"
+}
