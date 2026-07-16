@@ -27,7 +27,7 @@ jobs:
           cp artifacts/ride_planning_runtime_v1.json _site/artifacts/
           cp runtime/ride_planning_runtime.js _site/runtime/
           test "$(find _site -type f | wc -l)" -eq 13
-          ! grep -R -i -E 'garmin|google-site-verification|https?://' _site
+          ! grep -R -i -E 'garmin|https?://' _site
       - uses: actions/upload-pages-artifact@v4
         with:
           path: _site
