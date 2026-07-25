@@ -1,6 +1,8 @@
-import {estimateDestination, estimateDistance, validateArtifact} from './runtime/ride_planning_runtime.js';
+import {RUNTIME_VERSION, estimateDestination, estimateDistance, validateArtifact} from './runtime/ride_planning_runtime.js';
 const presets=[['collection','カード収集',10,true],['lunch','昼食',40,true],['snack','軽食',20,false],['sightseeing','観光・見学',30,false],['other','その他',10,false]];
 let artifact;
+let buildInfo;
+let serviceWorkerRegistration;
 let uiInitialized=false;
 const esc=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const duration=sec=>{const m=Math.floor(sec/60+.5),h=Math.floor(m/60);return h?`${h}時間${String(m%60).padStart(2,'0')}分`:`${m}分`};
@@ -22,12 +24,62 @@ function allocation(moving,planned,other){const total=moving+planned+other;if(to
 const component=(kind,icon,title,copy,value)=>`<div class="component ${kind}"><span class="icon">${icon}</span><span class="copy"><strong>${title}</strong><br><small>${copy}</small></span><span class="value">${value}</span></div>`;
 function warning(codes){return codes.includes('residual_ols_long_distance_low_evidence')?'<div class="notice">150km以上は過去の対象ライドが少なく、予測誤差が大きい可能性があります。</div>':''}
 function reveal(node,html){node.innerHTML=html.replace('<h1>計算結果</h1>','<h1>計算結果（概要）</h1>');node.scrollIntoView({behavior:'smooth',block:'start'})}
-function directResult(r,input){return `<section class="result"><h1>計算結果</h1><div class="summary"><div><span>出発時刻</span><strong>${esc(input.departure_time)}</strong></div><b class="arrow">→</b><div><span>予想帰宅時刻（P10–P90）</span><strong>${clock(input.epoch,r.arrival_lower_at)} 〜 ${clock(input.epoch,r.arrival_upper_at)}</strong><i class="central">中央予測 ${clock(input.epoch,r.arrival_at)}</i></div><div class="total"><span>所要時間（P10–P90）</span><strong>${duration(r.elapsed_lower_sec)} 〜 ${duration(r.elapsed_upper_sec)}</strong><br><i class="central">中央予測 ${duration(r.elapsed_time_sec)}</i></div></div><h2>所要時間の内訳</h2>${allocation(r.moving_time_sec,r.planned_event_time_sec,r.residual_nonmoving_time_sec)}<div class="breakdown">${component('moving','走','走行時間（移動）','信号待ち、補給、短い休憩などを含む',duration(r.moving_time_sec))}${component('planned','予','予定イベント時間','ユーザーが入力したイベントの合計',duration(r.planned_event_time_sec))}${component('other','他','その他','通常の停止時間＋入力した予備時間',`${duration(r.residual_nonmoving_time_sec)}<br><small>予測範囲は走行＋通常停止のP10–P90</small>`)}</div>${warning(r.warnings)}</section>`}
-function distanceResult(r,input){const movingLow=r.available_time_sec-r.planned_event_time_sec-r.residual_upper_sec,movingHigh=r.available_time_sec-r.planned_event_time_sec-r.residual_lower_sec;return `<section class="result"><h1>計算結果</h1><h2 class="distance-range">${km(r.distance_lower_km)} 〜 ${km(r.distance_upper_km)}</h2><p class="range-label">予測範囲（P10–P90）</p><p class="central">中央予測 ${km(r.prototype_max_distance_km)}</p><div class="fixed"><div><span>出発時刻</span><br><strong>${esc(input.departure_time)}</strong></div><b>→</b><div><span>帰宅期限</span><br><strong>${esc(input.deadline_time)}</strong></div><div><span>利用可能時間</span><br><strong>${duration(r.available_time_sec)}</strong></div></div><h2>時間配分の内訳</h2>${allocation(r.moving_time_sec,r.planned_event_time_sec,r.residual_nonmoving_time_sec)}<div class="breakdown">${component('moving','走','走行に使える時間（移動）','走行＋通常停止のP10–P90',`${duration(movingLow)} 〜 ${duration(movingHigh)}<br><i class="central">中央予測 ${duration(r.moving_time_sec)}</i>`)}${component('planned','予','予定イベント時間','ユーザーが入力したイベントの合計',duration(r.planned_event_time_sec))}${component('other','他','その他','通常の停止時間＋入力した予備時間',duration(r.residual_nonmoving_time_sec))}</div>${warning(r.warnings)}</section>`}
+function directResult(r,input){return `<section class="result"><h1>計算結果</h1><div class="summary"><div><span>出発時刻</span><strong>${esc(input.departure_time)}</strong></div><b class="arrow">→</b><div><span>予想帰宅時刻（早め予測～遅め予測）</span><strong>${clock(input.epoch,r.arrival_lower_at)} 〜 ${clock(input.epoch,r.arrival_upper_at)}</strong><i class="central">標準予測 ${clock(input.epoch,r.arrival_at)}</i></div><div class="total"><span>所要時間（早め予測～遅め予測）</span><strong>${duration(r.elapsed_lower_sec)} 〜 ${duration(r.elapsed_upper_sec)}</strong><br><i class="central">標準予測 ${duration(r.elapsed_time_sec)}</i></div></div><h2>所要時間の内訳</h2>${allocation(r.moving_time_sec,r.planned_event_time_sec,r.residual_nonmoving_time_sec)}<div class="breakdown">${component('moving','走','走行時間','自転車が移動している時間',duration(r.moving_time_sec))}${component('planned','予','予定イベント時間','ユーザーが入力したイベントの合計',duration(r.planned_event_time_sec))}${component('other','他','その他','通常の停止時間＋入力した予備時間',`${duration(r.residual_nonmoving_time_sec)}<br><small>範囲は走行＋通常停止の早め予測～遅め予測</small>`)}</div>${warning(r.warnings)}</section>`}
+function distanceResult(r,input){const movingLow=r.available_time_sec-r.planned_event_time_sec-r.residual_upper_sec,movingHigh=r.available_time_sec-r.planned_event_time_sec-r.residual_lower_sec;return `<section class="result"><h1>計算結果</h1><h2 class="distance-range">${km(r.distance_lower_km)} 〜 ${km(r.distance_upper_km)}</h2><p class="range-label">予測範囲（早め予測～遅め予測）</p><p class="central">標準予測 ${km(r.prototype_max_distance_km)}</p><div class="fixed"><div><span>出発時刻</span><br><strong>${esc(input.departure_time)}</strong></div><b>→</b><div><span>帰宅期限</span><br><strong>${esc(input.deadline_time)}</strong></div><div><span>利用可能時間</span><br><strong>${duration(r.available_time_sec)}</strong></div></div><h2>時間配分の内訳</h2>${allocation(r.moving_time_sec,r.planned_event_time_sec,r.residual_nonmoving_time_sec)}<div class="breakdown">${component('moving','走','走行時間','予測範囲に応じて走行へ使える時間',`${duration(movingLow)} 〜 ${duration(movingHigh)}<br><i class="central">標準予測 ${duration(r.moving_time_sec)}</i>`)}${component('planned','予','予定イベント時間','ユーザーが入力したイベントの合計',duration(r.planned_event_time_sec))}${component('other','他','その他','通常の停止時間＋入力した予備時間',duration(r.residual_nonmoving_time_sec))}</div>${warning(r.warnings)}</section>`}
 document.querySelectorAll('.mode-nav button').forEach(button=>button.addEventListener('click',()=>{document.querySelectorAll('.mode-nav button').forEach(b=>b.classList.toggle('active',b===button));document.querySelector('#destination-view').classList.toggle('hidden',button.dataset.mode!=='destination');document.querySelector('#distance-view').classList.toggle('hidden',button.dataset.mode!=='distance')}));
 document.querySelectorAll('[data-time]').forEach(button=>button.addEventListener('click',()=>button.closest('form').elements.departure_time.value=button.dataset.time));
 document.querySelectorAll('.current-time').forEach(button=>button.addEventListener('click',()=>{const n=new Date();button.closest('form').elements.departure_time.value=`${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}`}));
 document.querySelector('#destination-form').addEventListener('submit',event=>{event.preventDefault();const node=document.querySelector('#destination-result');try{const form=event.currentTarget,d=Number(form.elements.distance_km.value),time=form.elements.departure_time.value,e=epoch(time),r=estimateDestination({distance_km:d,departure_epoch_sec:e,event_minutes:selected(form),unexpected_buffer_minutes:unexpected(form)},artifact);reveal(node,directResult(r,{departure_time:time,epoch:e}))}catch(e){reveal(node,`<div class="error">${esc(e.message)}</div>`)}});
 document.querySelector('#distance-form').addEventListener('submit',event=>{event.preventDefault();const node=document.querySelector('#distance-result');try{const form=event.currentTarget,s=form.elements.departure_time.value,d=form.elements.deadline_time.value,start=epoch(s),end=epoch(d);if(end<=start)throw new Error('帰宅期限は出発時刻より後にしてください。');const r=estimateDistance({departure_epoch_sec:start,deadline_epoch_sec:end,event_minutes:selected(form),unexpected_buffer_minutes:unexpected(form)},artifact);reveal(node,distanceResult(r,{departure_time:s,deadline_time:d}))}catch(e){reveal(node,`<div class="error">${esc(e.message)}</div>`)}});
-fetch('./artifacts/ride_planning_runtime_v1.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('予測データを読み込めません。');return r.json()}).then(value=>{artifact=validateArtifact(value);updateAllSubmitStates()}).catch(error=>{artifact=undefined;updateAllSubmitStates();const node=document.querySelector('#fatal');node.textContent=`${error.message} 初回利用またはcache消去後は、通信可能な状態で開き直してください。`;node.classList.remove('hidden')});
-if('serviceWorker' in navigator)navigator.serviceWorker.register('./service-worker.js');
+const setText=(id,value)=>{const node=document.querySelector(id);if(node)node.textContent=value||'取得不可'};
+const short=value=>value&&value!=='unknown'?value.slice(0,12):'取得不可';
+const runtimeGeneration=value=>{const match=String(value||'').match(/runtime-v(\d+)(?:$|[.-])/);return match?Number(match[1]):null};
+async function sha256(buffer){const digest=await crypto.subtle.digest('SHA-256',buffer);return [...new Uint8Array(digest)].map(value=>value.toString(16).padStart(2,'0')).join('')}
+function showCompatibility(actualSha){
+  const compatible=buildInfo?.schema_version==='ride-planning-build-info-v1'&&
+    buildInfo.expected_runtime_version===RUNTIME_VERSION&&artifact?.runtime_version===RUNTIME_VERSION&&
+    buildInfo.expected_runtime_schema===artifact?.schema_version&&
+    buildInfo.ui_runtime_generation===runtimeGeneration(RUNTIME_VERSION)&&
+    buildInfo.artifact_sha256===actualSha;
+  document.querySelector('#cache-warning').classList.toggle('hidden',compatible);
+  return compatible;
+}
+function renderBuildInfo(actualSha){
+  setText('#ui-version',`${buildInfo.ui_version} (${short(buildInfo.ui_commit)})`);
+  setText('#runtime-version',artifact.runtime_version);setText('#artifact-sha',short(actualSha));
+  setText('#build-time',buildInfo.build_at);showCompatibility(actualSha);
+}
+function workerMessage(worker,type,timeout=3000){return new Promise(resolve=>{if(!worker){resolve(null);return}const channel=new MessageChannel();const timer=setTimeout(()=>resolve(null),timeout);channel.port1.onmessage=event=>{clearTimeout(timer);resolve(event.data)};worker.postMessage({type},[channel.port2])})}
+async function renderServiceWorkerInfo(registration){
+  const worker=navigator.serviceWorker.controller||registration?.active;
+  const value=await workerMessage(worker,'GET_VERSION');
+  setText('#cache-id',value?.cacheId?value.cacheId.replace('ride-planning-lab-',''):'取得不可');
+  setText('#sw-version',value?.serviceWorkerVersion);setText('#cache-updated-at',value?.cacheUpdatedAt);
+}
+async function waitForWaiting(registration,timeout=5000){
+  if(registration.waiting)return registration.waiting;
+  return new Promise(resolve=>{const timer=setTimeout(()=>resolve(registration.waiting),timeout);const installing=registration.installing;
+    if(!installing)return;installing.addEventListener('statechange',()=>{if(installing.state==='installed'){clearTimeout(timer);resolve(registration.waiting)}})});
+}
+async function refreshAssets(){
+  const button=document.querySelector('#refresh-assets'),status=document.querySelector('#refresh-status');button.disabled=true;status.textContent='最新版を確認しています…';
+  try{
+    if(!('serviceWorker' in navigator))throw new Error('Service Workerを利用できません。');
+    const registration=serviceWorkerRegistration||await navigator.serviceWorker.ready;await registration.update();
+    const waiting=await waitForWaiting(registration);if(waiting){const changed=new Promise(resolve=>navigator.serviceWorker.addEventListener('controllerchange',resolve,{once:true}));await workerMessage(waiting,'ACTIVATE_UPDATE');await Promise.race([changed,new Promise(resolve=>setTimeout(resolve,3000))])}
+    const refreshed=await workerMessage(navigator.serviceWorker.controller||registration.active,'REFRESH_ASSETS',10000);
+    if(!refreshed?.refreshed)throw new Error('最新assetを取得できませんでした。');
+    status.textContent='最新版を取得しました。再読み込みします…';location.reload();
+  }catch(error){status.textContent=`更新できませんでした: ${error.message}`;button.disabled=false}
+}
+document.querySelector('#refresh-assets').addEventListener('click',refreshAssets);
+async function loadApplication(){
+  try{
+    const [artifactResponse,infoResponse]=await Promise.all([fetch('./artifacts/ride_planning_runtime_v1.json',{cache:'no-store'}),fetch('./build-info.json',{cache:'no-store'})]);
+    if(!artifactResponse.ok)throw new Error('予測データを読み込めません。');if(!infoResponse.ok)throw new Error('ビルド情報を読み込めません。');
+    const artifactBytes=await artifactResponse.arrayBuffer();buildInfo=await infoResponse.json();artifact=validateArtifact(JSON.parse(new TextDecoder().decode(artifactBytes)));
+    renderBuildInfo(await sha256(artifactBytes));updateAllSubmitStates();
+  }catch(error){artifact=undefined;buildInfo=undefined;updateAllSubmitStates();const node=document.querySelector('#fatal');node.textContent=`${error.message} 初回利用またはcache消去後は、通信可能な状態で開き直してください。`;node.classList.remove('hidden');document.querySelector('#cache-warning').classList.remove('hidden')}
+}
+loadApplication();
+if('serviceWorker' in navigator)navigator.serviceWorker.register('./service-worker.js').then(registration=>{serviceWorkerRegistration=registration;return navigator.serviceWorker.ready}).then(renderServiceWorkerInfo).catch(()=>renderServiceWorkerInfo(null));

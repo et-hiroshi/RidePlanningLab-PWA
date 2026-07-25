@@ -1,6 +1,8 @@
-const CACHE = 'ride-planning-lab-e4e0e823e2afc47e';
+const CACHE = 'ride-planning-lab-27fe1dbb03b1a21d';
 const PREFIX = 'ride-planning-lab-';
-const ASSETS = ["./app.js", "./apple-touch-icon.png", "./artifacts/ride_planning_runtime_v1.json", "./icon-192.png", "./icon-512.png", "./index.html", "./manifest.webmanifest", "./runtime/ride_planning_runtime.js", "./style.css"];
+const VERSION = 'ride-planning-service-worker-v2';
+const UPDATED_AT = '2026-07-26T08:36:26+09:00';
+const ASSETS = ["./app.js", "./apple-touch-icon.png", "./artifacts/ride_planning_runtime_v1.json", "./build-info.json", "./icon-192.png", "./icon-512.png", "./index.html", "./manifest.webmanifest", "./release-info.css", "./runtime/ride_planning_runtime.js", "./style.css"];
 self.addEventListener('install', event => event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS))));
 self.addEventListener('activate', event => event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key.startsWith(PREFIX) && key !== CACHE).map(key => caches.delete(key)))).then(() => self.clients.claim())));
 self.addEventListener('fetch', event => {
@@ -9,4 +11,19 @@ self.addEventListener('fetch', event => {
     if (event.request.mode === 'navigate') return caches.match(new URL('./index.html', self.registration.scope).href);
     throw new Error('offline asset is unavailable');
   })));
+});
+self.addEventListener('message', event => {
+  const reply = value => { if (event.ports && event.ports[0]) event.ports[0].postMessage(value); };
+  if (event.data?.type === 'GET_VERSION') {
+    reply({cacheId:CACHE,serviceWorkerVersion:VERSION,cacheUpdatedAt:UPDATED_AT});
+  }
+  if (event.data?.type === 'ACTIVATE_UPDATE') {
+    event.waitUntil(self.skipWaiting().then(() => reply({activated:true})));
+  }
+  if (event.data?.type === 'REFRESH_ASSETS') {
+    event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS))
+      .then(() => caches.keys()).then(keys => Promise.all(keys.filter(
+        key => key.startsWith(PREFIX) && key !== CACHE).map(key => caches.delete(key))))
+      .then(() => reply({refreshed:true,cacheId:CACHE})));
+  }
 });
