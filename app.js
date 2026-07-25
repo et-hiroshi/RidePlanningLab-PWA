@@ -1,6 +1,7 @@
 import {estimateDestination, estimateDistance, validateArtifact} from './runtime/ride_planning_runtime.js';
 const presets=[['collection','カード収集',10,true],['lunch','昼食',40,true],['snack','軽食',20,false],['sightseeing','観光・見学',30,false],['other','その他',10,false]];
 let artifact;
+let uiInitialized=false;
 const esc=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const duration=sec=>{const m=Math.floor(sec/60+.5),h=Math.floor(m/60);return h?`${h}時間${String(m%60).padStart(2,'0')}分`:`${m}分`};
 const km=value=>`${Number(value).toFixed(1)} km`;
@@ -8,6 +9,13 @@ function eventRows(){return presets.map(([code,label,minutes,checked])=>`<div cl
 document.querySelectorAll('[data-events]').forEach(node=>node.innerHTML=eventRows());
 function selected(form){return [...form.querySelectorAll('[name=selected_event]:checked')].map(box=>{const v=Number(new FormData(form).get(`event_${box.value}`));if(!Number.isInteger(v)||v<0)throw new Error('予定イベント時間は0以上の整数で入力してください。');return v})}
 function unexpected(form){if(!form.elements.unexpected_enabled.checked)return 0;const v=Number(form.elements.unexpected_buffer_minutes.value);if(!Number.isInteger(v)||v<0)throw new Error('バッファ時間は0以上の整数で入力してください。');return v}
+function updateSubmitState(form){const button=form.querySelector('button.primary');if(!button)return;const enabled=artifact!==undefined&&form.checkValidity();button.disabled=!enabled;if(enabled)button.removeAttribute('disabled');else button.setAttribute('disabled','')}
+function updateAllSubmitStates(){if(!uiInitialized)return;document.querySelectorAll('form').forEach(updateSubmitState)}
+function initializeSubmitStates(){if(uiInitialized)return;const forms=[...document.querySelectorAll('form')];if(!forms.length)return;uiInitialized=true;forms.forEach(form=>{form.addEventListener('input',()=>updateSubmitState(form));form.addEventListener('change',()=>updateSubmitState(form))});updateAllSubmitStates()}
+initializeSubmitStates();
+if(!uiInitialized)document.addEventListener('DOMContentLoaded',initializeSubmitStates,{once:true});
+window.addEventListener('pageshow',updateAllSubmitStates);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)updateAllSubmitStates()});
 function epoch(time){const now=new Date(),parts=time.split(':').map(Number);return new Date(now.getFullYear(),now.getMonth(),now.getDate(),parts[0],parts[1]).getTime()/1000}
 function clock(departureEpoch,arrivalEpoch){const d=new Date(arrivalEpoch*1000),days=Math.floor((arrivalEpoch-departureEpoch)/86400);return `${days>0?'翌日 ':''}${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`}
 function allocation(moving,planned,other){const total=moving+planned+other;if(total<=0)return '<div class="notice">データがありません</div>';let x=0;return `<svg class="allocation" viewBox="0 0 100 1" preserveAspectRatio="none" aria-label="中央予測の時間配分">${[[moving,'moving-fill'],[planned,'planned-fill'],[other,'other-fill']].filter(([v])=>v>0).map(([v,c],i,a)=>{const width=i===a.length-1?100-x:v/total*100;const rect=`<rect class="${c}" x="${x}" width="${width}" height="1"/>`;x+=width;return rect}).join('')}</svg>`}
@@ -21,5 +29,5 @@ document.querySelectorAll('[data-time]').forEach(button=>button.addEventListener
 document.querySelectorAll('.current-time').forEach(button=>button.addEventListener('click',()=>{const n=new Date();button.closest('form').elements.departure_time.value=`${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}`}));
 document.querySelector('#destination-form').addEventListener('submit',event=>{event.preventDefault();const node=document.querySelector('#destination-result');try{const form=event.currentTarget,d=Number(form.elements.distance_km.value),time=form.elements.departure_time.value,e=epoch(time),r=estimateDestination({distance_km:d,departure_epoch_sec:e,event_minutes:selected(form),unexpected_buffer_minutes:unexpected(form)},artifact);reveal(node,directResult(r,{departure_time:time,epoch:e}))}catch(e){reveal(node,`<div class="error">${esc(e.message)}</div>`)}});
 document.querySelector('#distance-form').addEventListener('submit',event=>{event.preventDefault();const node=document.querySelector('#distance-result');try{const form=event.currentTarget,s=form.elements.departure_time.value,d=form.elements.deadline_time.value,start=epoch(s),end=epoch(d);if(end<=start)throw new Error('帰宅期限は出発時刻より後にしてください。');const r=estimateDistance({departure_epoch_sec:start,deadline_epoch_sec:end,event_minutes:selected(form),unexpected_buffer_minutes:unexpected(form)},artifact);reveal(node,distanceResult(r,{departure_time:s,deadline_time:d}))}catch(e){reveal(node,`<div class="error">${esc(e.message)}</div>`)}});
-fetch('./artifacts/ride_planning_runtime_v1.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('予測データを読み込めません。');return r.json()}).then(value=>{artifact=validateArtifact(value);document.querySelectorAll('button.primary').forEach(b=>b.disabled=false)}).catch(error=>{const node=document.querySelector('#fatal');node.textContent=`${error.message} 初回利用またはcache消去後は、通信可能な状態で開き直してください。`;node.classList.remove('hidden');document.querySelectorAll('form button').forEach(b=>b.disabled=true)});
+fetch('./artifacts/ride_planning_runtime_v1.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('予測データを読み込めません。');return r.json()}).then(value=>{artifact=validateArtifact(value);updateAllSubmitStates()}).catch(error=>{artifact=undefined;updateAllSubmitStates();const node=document.querySelector('#fatal');node.textContent=`${error.message} 初回利用またはcache消去後は、通信可能な状態で開き直してください。`;node.classList.remove('hidden')});
 if('serviceWorker' in navigator)navigator.serviceWorker.register('./service-worker.js');

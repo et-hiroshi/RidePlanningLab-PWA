@@ -5,15 +5,15 @@
   "files": {
     ".nojekyll": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "_headers": "9aef9259b0745e6c31aba97bc1fd59aed0345776afcf9e05f313eb2caf05ac93",
-    "app.js": "86edb0529a0a02c5a9e68874d2a63c43f01e80d700d0f257a7d71fed4ab5b8f3",
+    "app.js": "4e2af18002caaf280ef978f900decbfd0272dfc748f3213c53729c4449e26f10",
     "apple-touch-icon.png": "5258abe2d7a64afdc6b40626c6ce6c7730eda06791c329bb6ccbce701348f341",
     "artifacts/ride_planning_runtime_v1.json": "cf98036b4e417e34c111b307d557bf8e01359083ae45f62921e56c489413abc3",
     "icon-192.png": "7e8a7583bb1e8faefd5bb872eaaffae4cdfc0c916a9df093ad02b50ea7c73210",
     "icon-512.png": "c95cf26b50ab435ef691145c96721bba7d767a42e0a0bf71ebbb14c696842dcf",
-    "index.html": "ef384f6989a80b77de08ddacb196856a9df392d27d395ac1a16ed2b89c0d9840",
+    "index.html": "352908ba5516487b167f49bc87a947a7d0f101a69d16451cfc6c42b565972cf2",
     "manifest.webmanifest": "d21a2b145385c824d070c4b3f559e042d9b5950af725fed39db8e7696626301f",
     "runtime/ride_planning_runtime.js": "964b7b013a72f0c78d5916603277c1524406673a1819c5d32bda4b001b59d203",
-    "service-worker.js": "e98aaa1b9d2fdf7baf550c82637e616d072ff63a5d00c03a09bf69f046080e42",
+    "service-worker.js": "5ddfb8ea82033b5b274dcc5f263688d913ce0aa14b0e005193b5eb850a5928db",
     "style.css": "6216313b94eb574e6b07bb4af040596e1970b0982c4e3cb306d88a92a2418594"
   },
   "runtime_version": "mobile-ride-planning-practical-runtime-v4"

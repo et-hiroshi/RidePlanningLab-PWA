@@ -1,4 +1,4 @@
-const CACHE = 'ride-planning-lab-919ec0fe7d5e619d';
+const CACHE = 'ride-planning-lab-e4e0e823e2afc47e';
 const PREFIX = 'ride-planning-lab-';
 const ASSETS = ["./app.js", "./apple-touch-icon.png", "./artifacts/ride_planning_runtime_v1.json", "./icon-192.png", "./icon-512.png", "./index.html", "./manifest.webmanifest", "./runtime/ride_planning_runtime.js", "./style.css"];
 self.addEventListener('install', event => event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS))));

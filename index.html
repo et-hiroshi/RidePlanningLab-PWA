@@ -13,12 +13,12 @@
 <div class="basic-inputs"><label>往復距離（km）<input name="distance_km" value="140" type="number" min="0" step="0.1" inputmode="decimal" required></label><label>出発時刻<input name="departure_time" value="08:00" type="time" required></label></div>
 <strong class="quick-label">出発時刻のクイック選択</strong><div class="presets"><button class="current-time" type="button">◷ 現在時刻</button><button type="button" data-time="05:00">05:00</button><button type="button" data-time="08:00">08:00</button></div>
 <fieldset class="events"><legend>予定イベント・予備時間（任意）</legend><p>計画に含める項目だけチェックしてください。</p><div data-events></div><div class="event buffer-event"><label><input type="checkbox" name="unexpected_enabled" checked><span>バッファ</span></label><label class="minutes"><input type="number" name="unexpected_buffer_minutes" value="20" min="0" step="1" inputmode="numeric"><span>分</span></label></div></fieldset>
-<button class="primary" type="submit" disabled><span aria-hidden="true">▦</span> 計算する</button></form></section><div id="destination-result" aria-live="polite"></div></section>
+<button class="primary" type="submit"><span aria-hidden="true">▦</span> 計算する</button></form></section><div id="destination-result" aria-live="polite"></div></section>
 <section id="distance-view" class="hidden"><section class="panel input-panel"><h1 class="visually-hidden">使える時間から距離を調べる</h1><form id="distance-form">
 <div class="basic-inputs"><label>出発時刻<input name="departure_time" value="08:00" type="time" required></label><label>帰宅期限<input name="deadline_time" value="17:00" type="time" required></label></div>
 <strong class="quick-label">出発時刻のクイック選択</strong><div class="presets"><button class="current-time" type="button">◷ 現在時刻</button><button type="button" data-time="05:00">05:00</button><button type="button" data-time="08:00">08:00</button></div>
 <fieldset class="events"><legend>予定イベント・予備時間（任意）</legend><p>計画に含める項目だけチェックしてください。</p><div data-events></div><div class="event buffer-event"><label><input type="checkbox" name="unexpected_enabled" checked><span>バッファ</span></label><label class="minutes"><input type="number" name="unexpected_buffer_minutes" value="20" min="0" step="1" inputmode="numeric"><span>分</span></label></div></fieldset>
-<button class="primary" type="submit" disabled><span aria-hidden="true">▦</span> 計算する</button></form></section><div id="distance-result" aria-live="polite"></div></section>
+<button class="primary" type="submit"><span aria-hidden="true">▦</span> 計算する</button></form></section><div id="distance-result" aria-live="polite"></div></section>
 <aside class="notice">過去の実績に基づく予測です。条件により結果は変動します。</aside>
 <aside class="about"><strong>このツールについて</strong><p>Ride Planning Labは個人用のサイクリング計画ツールです。距離、時刻、イベント時間だけを端末内で計算し、ログインや個人情報の入力は不要です。入力内容を外部へ送信しません。予測結果は過去の実績に基づく目安であり、帰宅時刻や安全を保証するものではありません。</p></aside></main>
 <footer><strong>Personal Use</strong> — 予測値は目安であり、帰宅時刻や安全を保証しません。</footer><script type="module" src="./app.js"></script></body></html>
