@@ -34,9 +34,11 @@ document.querySelector('#distance-form').addEventListener('submit',event=>{event
 const setText=(id,value)=>{const node=document.querySelector(id);if(node)node.textContent=value||'取得不可'};
 const short=value=>value&&value!=='unknown'?value.slice(0,12):'取得不可';
 const runtimeGeneration=value=>{const match=String(value||'').match(/runtime-v(\d+)(?:$|[.-])/);return match?Number(match[1]):null};
-async function sha256(buffer){const digest=await crypto.subtle.digest('SHA-256',buffer);return [...new Uint8Array(digest)].map(value=>value.toString(16).padStart(2,'0')).join('')}
+const withTimeout=(promise,timeout,label)=>new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error(`${label}がタイムアウトしました。`)),timeout);Promise.resolve(promise).then(value=>{clearTimeout(timer);resolve(value)},error=>{clearTimeout(timer);reject(error)})});
+const fetchWithin=(url,label,timeout=3000)=>withTimeout(fetch(url,{cache:'no-store'}),timeout,label);
+async function sha256(buffer){if(!globalThis.crypto?.subtle)throw new Error('SHA-256確認は非対応です。');const digest=await withTimeout(crypto.subtle.digest('SHA-256',buffer),3000,'Artifact SHA確認');return [...new Uint8Array(digest)].map(value=>value.toString(16).padStart(2,'0')).join('')}
 function showCompatibility(actualSha){
-  const compatible=buildInfo?.schema_version==='ride-planning-build-info-v1'&&
+  const compatible=Boolean(buildInfo&&actualSha)&&buildInfo.schema_version==='ride-planning-build-info-v1'&&
     buildInfo.expected_runtime_version===RUNTIME_VERSION&&artifact?.runtime_version===RUNTIME_VERSION&&
     buildInfo.expected_runtime_schema===artifact?.schema_version&&
     buildInfo.ui_runtime_generation===runtimeGeneration(RUNTIME_VERSION)&&
@@ -44,42 +46,48 @@ function showCompatibility(actualSha){
   document.querySelector('#cache-warning').classList.toggle('hidden',compatible);
   return compatible;
 }
-function renderBuildInfo(actualSha){
-  setText('#ui-version',`${buildInfo.ui_version} (${short(buildInfo.ui_commit)})`);
-  setText('#runtime-version',artifact.runtime_version);setText('#artifact-sha',short(actualSha));
-  setText('#build-time',buildInfo.build_at);showCompatibility(actualSha);
-}
-function workerMessage(worker,type,timeout=3000){return new Promise(resolve=>{if(!worker){resolve(null);return}const channel=new MessageChannel();const timer=setTimeout(()=>resolve(null),timeout);channel.port1.onmessage=event=>{clearTimeout(timer);resolve(event.data)};worker.postMessage({type},[channel.port2])})}
+function workerMessage(worker,type,timeout=3000){return new Promise((resolve,reject)=>{if(!worker){reject(new Error('Service Workerが未登録です。'));return}const channel=new MessageChannel();const timer=setTimeout(()=>reject(new Error(`Service Worker ${type}がタイムアウトしました。`)),timeout);channel.port1.onmessage=event=>{clearTimeout(timer);resolve(event.data)};try{worker.postMessage({type},[channel.port2])}catch(error){clearTimeout(timer);reject(error)}})}
 async function renderServiceWorkerInfo(registration){
   const worker=navigator.serviceWorker.controller||registration?.active;
-  const value=await workerMessage(worker,'GET_VERSION');
-  setText('#cache-id',value?.cacheId?value.cacheId.replace('ride-planning-lab-',''):'取得不可');
-  setText('#sw-version',value?.serviceWorkerVersion);setText('#cache-updated-at',value?.cacheUpdatedAt);
+  try{const value=await workerMessage(worker,'GET_VERSION');
+    setText('#cache-id',value?.cacheId?value.cacheId.replace('ride-planning-lab-',''):'取得失敗');
+    setText('#sw-version',value?.serviceWorkerVersion||'取得失敗');setText('#cache-updated-at',value?.cacheUpdatedAt||'取得失敗');
+  }catch(error){setText('#cache-id',worker?'取得失敗':'未登録');setText('#sw-version',worker?'取得失敗':'未登録');setText('#cache-updated-at','取得失敗')}
 }
 async function waitForWaiting(registration,timeout=5000){
   if(registration.waiting)return registration.waiting;
   return new Promise(resolve=>{const timer=setTimeout(()=>resolve(registration.waiting),timeout);const installing=registration.installing;
-    if(!installing)return;installing.addEventListener('statechange',()=>{if(installing.state==='installed'){clearTimeout(timer);resolve(registration.waiting)}})});
+    if(!installing){clearTimeout(timer);resolve(null);return}installing.addEventListener('statechange',()=>{if(installing.state==='installed'||installing.state==='redundant'){clearTimeout(timer);resolve(registration.waiting)}})});
 }
 async function refreshAssets(){
   const button=document.querySelector('#refresh-assets'),status=document.querySelector('#refresh-status');button.disabled=true;status.textContent='最新版を確認しています…';
   try{
     if(!('serviceWorker' in navigator))throw new Error('Service Workerを利用できません。');
-    const registration=serviceWorkerRegistration||await navigator.serviceWorker.ready;await registration.update();
+    const registration=serviceWorkerRegistration||await withTimeout(navigator.serviceWorker.ready,3000,'Service Worker登録');await withTimeout(registration.update(),5000,'Service Worker更新');
     const waiting=await waitForWaiting(registration);if(waiting){const changed=new Promise(resolve=>navigator.serviceWorker.addEventListener('controllerchange',resolve,{once:true}));await workerMessage(waiting,'ACTIVATE_UPDATE');await Promise.race([changed,new Promise(resolve=>setTimeout(resolve,3000))])}
     const refreshed=await workerMessage(navigator.serviceWorker.controller||registration.active,'REFRESH_ASSETS',10000);
     if(!refreshed?.refreshed)throw new Error('最新assetを取得できませんでした。');
     status.textContent='最新版を取得しました。再読み込みします…';location.reload();
-  }catch(error){status.textContent=`更新できませんでした: ${error.message}`;button.disabled=false}
+  }catch(error){status.textContent=`更新できませんでした: ${error?.message||'原因不明のエラー'}`;button.disabled=false}
 }
 document.querySelector('#refresh-assets').addEventListener('click',refreshAssets);
-async function loadApplication(){
-  try{
-    const [artifactResponse,infoResponse]=await Promise.all([fetch('./artifacts/ride_planning_runtime_v1.json',{cache:'no-store'}),fetch('./build-info.json',{cache:'no-store'})]);
-    if(!artifactResponse.ok)throw new Error('予測データを読み込めません。');if(!infoResponse.ok)throw new Error('ビルド情報を読み込めません。');
-    const artifactBytes=await artifactResponse.arrayBuffer();buildInfo=await infoResponse.json();artifact=validateArtifact(JSON.parse(new TextDecoder().decode(artifactBytes)));
-    renderBuildInfo(await sha256(artifactBytes));updateAllSubmitStates();
-  }catch(error){artifact=undefined;buildInfo=undefined;updateAllSubmitStates();const node=document.querySelector('#fatal');node.textContent=`${error.message} 初回利用またはcache消去後は、通信可能な状態で開き直してください。`;node.classList.remove('hidden');document.querySelector('#cache-warning').classList.remove('hidden')}
+async function loadArtifact(){
+  setText('#runtime-version',RUNTIME_VERSION);
+  try{const response=await fetchWithin('./artifacts/ride_planning_runtime_v1.json','予測データ');if(!response.ok)throw new Error(`予測データ取得失敗 (${response.status})`);
+    const bytes=await withTimeout(response.arrayBuffer(),3000,'予測データ読込');artifact=validateArtifact(JSON.parse(new TextDecoder().decode(bytes)));updateAllSubmitStates();
+    try{const digest=await sha256(bytes);setText('#artifact-sha',short(digest));return digest}catch(error){setText('#artifact-sha',error.message.includes('非対応')?'非対応':'取得失敗');return null}
+  }catch(error){artifact=undefined;setText('#artifact-sha','取得失敗');updateAllSubmitStates();const node=document.querySelector('#fatal');node.textContent=`${error.message} 初回利用またはcache消去後は、通信可能な状態で開き直してください。`;node.classList.remove('hidden');return null}
 }
-loadApplication();
-if('serviceWorker' in navigator)navigator.serviceWorker.register('./service-worker.js').then(registration=>{serviceWorkerRegistration=registration;return navigator.serviceWorker.ready}).then(renderServiceWorkerInfo).catch(()=>renderServiceWorkerInfo(null));
+async function loadBuildInfo(){
+  try{const response=await fetchWithin('./build-info.json','ビルド情報');if(!response.ok)throw new Error(`ビルド情報取得失敗 (${response.status})`);buildInfo=await withTimeout(response.json(),3000,'ビルド情報読込');setText('#ui-version',`${buildInfo.ui_version} (${short(buildInfo.ui_commit)})`);setText('#build-time',buildInfo.build_at);return buildInfo}
+  catch(error){buildInfo=undefined;setText('#ui-version','取得失敗');setText('#build-time','取得失敗');return null}
+}
+async function initializeVersionInfo(){const [actualSha]=await Promise.all([loadArtifact(),loadBuildInfo()]);showCompatibility(actualSha)}
+initializeVersionInfo();
+async function initializeServiceWorker(){
+  if(!('serviceWorker' in navigator)){setText('#cache-id','非対応');setText('#sw-version','非対応');setText('#cache-updated-at','非対応');return}
+  try{await withTimeout((async()=>{const registration=await navigator.serviceWorker.register('./service-worker.js');serviceWorkerRegistration=registration;const ready=await navigator.serviceWorker.ready;await renderServiceWorkerInfo(ready)})(),3500,'Service Worker情報')}
+  catch(error){setText('#cache-id','取得失敗');setText('#sw-version','取得失敗');setText('#cache-updated-at','取得失敗')}
+}
+initializeServiceWorker();
+setTimeout(()=>document.querySelectorAll('.version-panel dd').forEach(node=>{if(node.textContent==='確認中')node.textContent='取得失敗'}),4000);
