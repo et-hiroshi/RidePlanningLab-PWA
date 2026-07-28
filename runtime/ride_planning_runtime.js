@@ -1,5 +1,5 @@
-export const RUNTIME_VERSION = 'mobile-ride-planning-practical-runtime-v4';
-const SCHEMA = 'mobile-ride-planning-runtime-artifact-v4';
+export const RUNTIME_VERSION = 'mobile-ride-planning-practical-runtime-v5';
+const SCHEMA = 'mobile-ride-planning-runtime-artifact-v5';
 
 function finite(value, name, allowZero = true) {
   if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || (!allowZero && value === 0)) {
@@ -11,14 +11,14 @@ function finite(value, name, allowZero = true) {
 export function validateArtifact(a) {
   if (!a || a.product_identity !== 'ride-planning-lab' ||
       a.schema_version !== SCHEMA || a.runtime_version !== RUNTIME_VERSION ||
-      a.prototype_status !== 'personal_use_m2_complete') {
+      a.prototype_status !== 'personal_use_operational_natural_release') {
     throw new Error('予測データと計算runtimeのversionが一致しません。オンライン時に更新してください。');
   }
   finite(a.moving?.median_sec_per_km, 'moving rate', false);
   if (!a.natural || a.natural.episode_cap_sec !== 600 ||
-      a.natural.model!=='linear_rate_transition' ||
-      !Number.isFinite(a.natural.low_sec_per_km)||!Number.isFinite(a.natural.long_sec_per_km)||
-      a.natural.low_sec_per_km<0||a.natural.long_sec_per_km<a.natural.low_sec_per_km||
+      a.natural.model!=='linear_rate_transition_with_100km_band' ||
+      !Number.isFinite(a.natural.low_sec_per_km)||!Number.isFinite(a.natural.long_sec_per_km)||!Number.isFinite(a.natural.high_sec_per_km)||
+      a.natural.low_sec_per_km<0||a.natural.long_sec_per_km<a.natural.low_sec_per_km||a.natural.high_sec_per_km<a.natural.long_sec_per_km||
       !(a.natural.transition_start_km<a.natural.transition_end_km))
     throw new Error('Natural予測データが不正です。');
   finite(a.unexpected?.default_sec,'unexpected default');
@@ -49,7 +49,7 @@ function plannedSeconds(eventMinutes) {
 
 function naturalStop(distance,artifact){
   const n=artifact.natural,start=n.transition_start_km,end=n.transition_end_km;
-  const rate=distance<=start?n.low_sec_per_km:distance>=end?n.long_sec_per_km:
+  const rate=distance<=start?n.low_sec_per_km:distance>=100?n.high_sec_per_km:distance>=end?n.long_sec_per_km:
     n.low_sec_per_km+(n.long_sec_per_km-n.low_sec_per_km)*(distance-start)/(end-start);
   return distance*rate;
 }
