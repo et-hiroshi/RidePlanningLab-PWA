@@ -9,7 +9,7 @@
 .version-status{min-height:1.2em;margin:7px 0 0}
 @media(max-width:430px){.version-panel dl div{grid-template-columns:105px minmax(0,1fr)}}
 
-/* UI v9: concise range cards and consistent standard-time component rows. */
+/* UI v10: concise range cards and consistent user-input addition copy. */
 .input-panel{margin-bottom:22px;padding-bottom:20px}
 .top-notice{margin:-4px 2px 14px;color:var(--muted);font-size:.78rem;text-align:center}
 .result{margin-top:8px;padding-top:20px;border-width:2px;box-shadow:0 6px 18px #10261a1c}
