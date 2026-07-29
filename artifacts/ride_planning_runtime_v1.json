@@ -1,8 +1,8 @@
 {
   "limitation_codes": [
+    "100km_accuracy_evidence_is_counterfactual_not_prospective",
     "component_interval_is_empirical_not_safety_guarantee",
     "episode_reconstruction_is_approximate",
-    "purified_teacher_does_not_imply_operational_accuracy_gain",
     "r059_same_algorithm_result_is_inconclusive",
     "unexpected_default_is_user_editable_20_minutes"
   ],
@@ -23,7 +23,7 @@
     "low_sec_per_km": 33.87646482294287,
     "minimum_band_samples": 10,
     "model": "linear_rate_transition_with_100km_band",
-    "observed_100km_plus_sec_per_km": 58.75149931710996,
+    "observed_100km_plus_sec_per_km": 57.00743296739864,
     "sample_count_by_band": {
       "100_km_and_over": 52,
       "50_to_100_km": 104,
@@ -43,14 +43,14 @@
   },
   "source_identity": {
     "natural_actual_contract": "session-nonmoving-minus-confirmed-planned-then-per-stop-episode-10min-cap-v2",
-    "operational_release_id": "purified-natural-teacher-r058-r059-v1",
+    "operational_release_id": "purified-natural-teacher-100km-human-v2",
     "operational_release_schema": "ride-planning-pwa-operational-artifact-v1",
-    "operational_release_sha256": "061584c393dc6d9731883bd10bec53fc092341e272ad044ba9b6e4e34b8c8b70",
+    "operational_release_sha256": "b346e6f58b6a7d9d26c4e963d4dd24ca977af49c7e2e1944aee9d056d0ac9324",
     "practical_artifact_version": "practical-ride-time-estimator-v2.0.0",
     "practical_dataset": "sha256:b5635d9f90d35b37878a7ed02ceaf2f2289c92ad2119a631d245eb890d950561",
     "r059_result": "R059_INCONCLUSIVE",
-    "rollback_release_id": "practical-natural-current-teacher-v1",
-    "teacher_contract": "R059_S0_PURIFIED_HUMAN_NATURAL"
+    "rollback_release_id": "purified-natural-teacher-r058-r059-v1",
+    "teacher_contract": "PURIFIED_NATURAL_100KM_HUMAN_V2"
   },
   "uncertainty": {
     "anchors": [
@@ -96,31 +96,31 @@
       {
         "distance_km": 121.383,
         "fallback_source": "distance_band",
-        "p01_sec": -5051.888221093917,
-        "p025_sec": -4314.480728012968,
-        "p05_sec": -3497.765718787825,
-        "p10_sec": -2897.522108693447,
-        "p90_sec": 4948.367421230854,
-        "p95_sec": 6256.997365765754,
-        "p975_sec": 6332.258763820188,
-        "p99_sec": 6739.5916474395735,
+        "p01_sec": -5082.288221093917,
+        "p025_sec": -4390.480728012968,
+        "p05_sec": -4104.531686600221,
+        "p10_sec": -3373.760377991548,
+        "p90_sec": 1451.2587638201876,
+        "p95_sec": 2003.3674212308542,
+        "p975_sec": 2914.1469031858287,
+        "p99_sec": 4044.457180733786,
         "sample_count": 41
       },
       {
         "distance_km": 163.073,
         "fallback_source": "distance_band",
-        "p01_sec": -4211.519369482102,
-        "p025_sec": -4141.790305359078,
-        "p05_sec": -4025.5751984873714,
-        "p10_sec": -3793.144984743958,
-        "p90_sec": 1867.5118000172079,
-        "p95_sec": 2334.0061184751867,
-        "p975_sec": 2567.253277704176,
-        "p99_sec": 2707.2015732415703,
+        "p01_sec": -4581.146892176717,
+        "p025_sec": -4527.2899788523955,
+        "p05_sec": -4437.528456645192,
+        "p10_sec": -4258.005412230785,
+        "p90_sec": 1025.5118000172079,
+        "p95_sec": 1156.6285788669666,
+        "p975_sec": 1222.186968291846,
+        "p99_sec": 1261.5220019467736,
         "sample_count": 11
       }
     ],
-    "interval_version": "moving-natural-component-linear-80-purified-teacher-v1",
+    "interval_version": "moving-natural-component-linear-80-purified-teacher-v2",
     "long_distance_warning_km": 150,
     "quantile_levels": [
       0.1,
