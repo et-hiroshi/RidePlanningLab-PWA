@@ -9,7 +9,7 @@
 .version-status{min-height:1.2em;margin:7px 0 0}
 @media(max-width:430px){.version-panel dl div{grid-template-columns:105px minmax(0,1fr)}}
 
-/* UI v7: standard estimate first, readable component allocation, and print-safe spacing. */
+/* UI v8: public-friendly explanations and a compact, text-labelled allocation legend. */
 .input-panel{margin-bottom:22px;padding-bottom:20px}
 .top-notice{margin:-4px 2px 14px;color:var(--muted);font-size:.78rem;text-align:center}
 .result{margin-top:8px;padding-top:20px;border-width:2px;box-shadow:0 6px 18px #10261a1c}
@@ -21,7 +21,11 @@
 .departure{text-align:center;color:var(--muted);font-size:.82rem}.result h2{margin:22px 0 8px;font-size:1.05rem}
 .allocation{display:flex;width:100%;height:38px;margin:10px 0;border-radius:8px;overflow:hidden;background:#e8eee9}
 .allocation text{fill:#fff;font-weight:750;text-shadow:0 1px 2px #0008}.moving-fill{fill:var(--moving)}.natural-fill{fill:var(--other)}.unexpected-fill{fill:#9a4b15}.planned-fill{fill:var(--planned)}
+.allocation-legend{display:flex;flex-wrap:wrap;gap:6px 12px;margin:0 0 10px;padding:0;list-style:none;color:var(--muted);font-size:.72rem}
+.allocation-legend li{display:flex;align-items:center;gap:4px}.allocation-legend span{display:grid;width:20px;height:20px;place-items:center;border-radius:50%;color:#fff;font-size:.65rem;font-weight:800}
+.allocation-legend .moving span{background:var(--moving)}.allocation-legend .natural span{background:var(--other)}.allocation-legend .unexpected span{background:#9a4b15}.allocation-legend .planned span{background:var(--planned)}
 .natural .icon{background:var(--other)}.unexpected .icon{background:#9a4b15}.planned .icon{background:var(--planned)}
+.supporting-range .range-basis{max-width:34em;margin-top:3px;line-height:1.35;text-align:center}
 .range-note{margin:10px 0;color:var(--muted);font-size:.78rem}
 .event{margin:5px 0;padding:8px;border:1px solid var(--line);border-radius:9px;background:#fbfcfb}
 .event label:first-child{min-width:0}.event label:first-child span{overflow-wrap:anywhere}
