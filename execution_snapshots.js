@@ -1,4 +1,4 @@
-export const APP_VERSION='ride-planning-ui-v12';
+export const APP_VERSION='ride-planning-ui-v13';
 export const SNAPSHOT_SCHEMA_VERSION='ride-plan-execution-snapshot-v1';
 export const SNAPSHOT_RECORD_TYPE='ride_plan_execution_snapshot';
 export const SNAPSHOT_STORE_SCHEMA_VERSION='ride-plan-execution-snapshot-store-v1';
@@ -6,6 +6,7 @@ export const SNAPSHOT_STORAGE_KEY='ride-planning-lab-execution-snapshots-v1';
 export const CALCULATION_CONTRACT_VERSION='mobile-ride-planning-practical-calculation-v5';
 
 const clone=value=>JSON.parse(JSON.stringify(value));
+const canonical=value=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])])):value;
 const uuidPattern=/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const finite=value=>typeof value==='number'&&Number.isFinite(value);
 function requireFinite(value,label){if(!finite(value))throw new Error(`${label}が不正です。`)}
@@ -53,6 +54,10 @@ export function createExecutionSnapshot(payload,{now=()=>new Date(),cryptoObject
   const record={schema_version:SNAPSHOT_SCHEMA_VERSION,record_type:SNAPSHOT_RECORD_TYPE,execution_snapshot_id:newUuid(cryptoObject),created_at:created.toISOString(),calculation:clone(payload.calculation),reproduction:clone(payload.reproduction)};
   if(name)record.display_name=name;
   validateExecutionSnapshot(record);return record;
+}
+export function sameExecutionSnapshotContent(saved,payload){
+  if(!saved||!payload)return false;
+  return JSON.stringify(canonical({calculation:saved.calculation,reproduction:saved.reproduction}))===JSON.stringify(canonical({calculation:payload.calculation,reproduction:payload.reproduction}));
 }
 export function loadExecutionSnapshots(storage=globalThis.localStorage){return clone(readEnvelope(storage).records)}
 export function appendExecutionSnapshot(record,storage=globalThis.localStorage){
