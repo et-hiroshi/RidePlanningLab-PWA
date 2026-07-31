@@ -284,8 +284,10 @@ function copySnapshotToInputs(record, setSnapshotNameDraft) {
   if (destination) form.elements.distance_km.value = input.distance_km;
   else form.elements.deadline_time.value = snapshotClock(input.return_deadline_epoch_sec);
   applyPlannedEvents(form, input.planned_events);
-  form.elements.unexpected_enabled.checked = input.reserve_time_sec > 0;
-  form.elements.unexpected_buffer_minutes.value = input.reserve_time_sec / 60;
+  const hasReserve = input.reserve_time_sec > 0;
+  const reserveField = form.elements.unexpected_buffer_minutes;
+  form.elements.unexpected_enabled.checked = hasReserve;
+  reserveField.value = hasReserve ? input.reserve_time_sec / 60 : reserveField.defaultValue;
   setSnapshotNameDraft(mode, record.display_name || '');
   form.dispatchEvent(new Event('input', { bubbles: true }));
   form.scrollIntoView({ behavior: 'smooth', block: 'start' });
