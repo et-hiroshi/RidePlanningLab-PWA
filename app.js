@@ -1,5 +1,5 @@
 import {RUNTIME_VERSION, estimateDestination, estimateDistance, validateArtifact} from './runtime/ride_planning_runtime.js';
-import {APP_VERSION, CALCULATION_CONTRACT_VERSION, appendExecutionSnapshot, createExecutionSnapshot, deleteAllExecutionSnapshots, executionSnapshotsFilename, executionSnapshotsJsonl, loadExecutionSnapshots, sameExecutionSnapshotContent} from './execution_snapshots.js?v=ride-planning-ui-v15';
+import {APP_VERSION, CALCULATION_CONTRACT_VERSION, appendExecutionSnapshot, createExecutionSnapshot, deleteAllExecutionSnapshots, deleteExecutionSnapshot, executionSnapshotsFilename, executionSnapshotsJsonl, loadExecutionSnapshots, sameExecutionSnapshotContent} from './execution_snapshots.js?v=ride-planning-ui-v15';
 
 const presets = [
   ['collection', 'カード収集', 10, true],
@@ -201,17 +201,95 @@ function reveal(node, html) {
   node.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+const escapeSnapshotHtml = value => String(value).replace(/[&<>"']/g, character => ({
+  '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+}[character]));
+
+const snapshotClock = epochSec => {
+  const date = new Date(epochSec * 1000);
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+};
+
+const createdAt = value => new Date(value).toLocaleString('ja-JP', {
+  year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+});
+
+function snapshotHeading(record) {
+  const name = record.display_name || '名称未設定の計画';
+  const input = record.calculation.input;
+  const target = record.calculation.mode === 'distance_to_time'
+    ? `${Number(input.distance_km).toFixed(1)} km`
+    : `帰宅期限 ${snapshotClock(input.return_deadline_epoch_sec)}`;
+  return { name, target };
+}
+
+function renderSnapshotList(records) {
+  const list = document.querySelector('#snapshot-list');
+  if (!records.length) {
+    list.innerHTML = '<p class="snapshot-empty">保存済みの実行用計画はありません。</p>';
+    return;
+  }
+  list.innerHTML = [...records].reverse().map(record => {
+    const { name, target } = snapshotHeading(record);
+    const input = record.calculation.input;
+    const result = record.calculation.result;
+    const mode = record.calculation.mode === 'distance_to_time'
+      ? '目的地までの時間' : '使える時間から距離';
+    return `<details class="snapshot-item" data-snapshot-id="${record.execution_snapshot_id}">
+      <summary><span><strong>${escapeSnapshotHtml(name)}</strong><small>${escapeSnapshotHtml(createdAt(record.created_at))}</small></span><b>${escapeSnapshotHtml(target)}</b></summary>
+      <dl>
+        <div><dt>計算方法</dt><dd>${mode}</dd></div>
+        <div><dt>出発時刻</dt><dd>${escapeSnapshotHtml(snapshotClock(input.departure_epoch_sec))}</dd></div>
+        <div><dt>標準予測</dt><dd>${Number(result.standard_distance_km).toFixed(1)} km・${Math.round(result.standard_elapsed_sec / 60)}分</dd></div>
+        <div><dt>Snapshot ID</dt><dd class="snapshot-id">${record.execution_snapshot_id}</dd></div>
+      </dl>
+      <div class="snapshot-item-actions">
+        <button type="button" class="secondary" data-copy-snapshot>コピーして再編集</button>
+        <button type="button" class="secondary danger" data-delete-snapshot>削除</button>
+      </div>
+    </details>`;
+  }).join('');
+}
+
 function updateSnapshotCount(message = '') {
   const count = document.querySelector('#snapshot-count');
   const status = document.querySelector('#snapshot-management-status');
   try {
     const records = loadExecutionSnapshots();
     count.textContent = `${records.length}件`;
+    renderSnapshotList(records);
     status.textContent = message;
   } catch (error) {
     count.textContent = '読込エラー';
     status.textContent = error.message;
   }
+}
+
+function applyPlannedEvents(form, plannedEvents) {
+  const byCode = new Map(plannedEvents.map(event => [event.event_code, event]));
+  form.querySelectorAll('[name=selected_event]').forEach(box => {
+    const event = byCode.get(box.value);
+    box.checked = Boolean(event);
+    if (event) form.elements[`event_${box.value}`].value = event.planned_duration_sec / 60;
+  });
+}
+
+function copySnapshotToInputs(record) {
+  const input = record.calculation.input;
+  const destination = record.calculation.mode === 'distance_to_time';
+  const mode = destination ? 'destination' : 'distance';
+  document.querySelector(`[data-mode=${mode}]`).click();
+  const form = document.querySelector(`#${mode}-form`);
+  form.elements.departure_time.value = snapshotClock(input.departure_epoch_sec);
+  if (destination) form.elements.distance_km.value = input.distance_km;
+  else form.elements.deadline_time.value = snapshotClock(input.return_deadline_epoch_sec);
+  applyPlannedEvents(form, input.planned_events);
+  form.elements.unexpected_enabled.checked = input.reserve_time_sec > 0;
+  form.elements.unexpected_buffer_minutes.value = input.reserve_time_sec / 60;
+  form.dispatchEvent(new Event('input', { bubbles: true }));
+  form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  document.querySelector('#snapshot-management-status').textContent =
+    '入力欄にコピーしました。内容を確認して再計算してください。';
 }
 
 function initializeSnapshotUi(currentCalculations, reproduction) {
@@ -247,6 +325,31 @@ function initializeSnapshotUi(currentCalculations, reproduction) {
       status.textContent = `保存できませんでした: ${error.message}`;
     } finally {
       button.disabled = false;
+    }
+  });
+
+  document.querySelector('#snapshot-list').addEventListener('click', event => {
+    const item = event.target.closest('[data-snapshot-id]');
+    if (!item) return;
+    try {
+      const record = loadExecutionSnapshots().find(
+        candidate => candidate.execution_snapshot_id === item.dataset.snapshotId,
+      );
+      if (!record) {
+        updateSnapshotCount('対象の実行用計画が見つかりません。');
+        return;
+      }
+      if (event.target.closest('[data-copy-snapshot]')) {
+        copySnapshotToInputs(record);
+        return;
+      }
+      if (!event.target.closest('[data-delete-snapshot]')) return;
+      if (!confirm(`「${record.display_name || '名称未設定の計画'}」を削除します。元に戻せません。よろしいですか？`)) return;
+      deleteExecutionSnapshot(record.execution_snapshot_id);
+      updateSnapshotCount('実行用計画を削除しました。');
+    } catch (error) {
+      document.querySelector('#snapshot-management-status').textContent =
+        `操作できませんでした: ${error.message}`;
     }
   });
 

@@ -66,6 +66,11 @@ export function appendExecutionSnapshot(record,storage=globalThis.localStorage){
   const next={schema_version:SNAPSHOT_STORE_SCHEMA_VERSION,records:[...envelope.records,clone(record)]};
   storage.setItem(SNAPSHOT_STORAGE_KEY,JSON.stringify(next));return clone(record);
 }
+export function deleteExecutionSnapshot(executionSnapshotId,storage=globalThis.localStorage){
+  const envelope=readEnvelope(storage),records=envelope.records.filter(item=>item.execution_snapshot_id!==executionSnapshotId);
+  if(records.length===envelope.records.length)throw new Error('削除するSnapshotが見つかりません。');
+  storage.setItem(SNAPSHOT_STORAGE_KEY,JSON.stringify({schema_version:SNAPSHOT_STORE_SCHEMA_VERSION,records}));
+}
 export function deleteAllExecutionSnapshots(storage=globalThis.localStorage){readEnvelope(storage);storage.removeItem(SNAPSHOT_STORAGE_KEY)}
 export function executionSnapshotsJsonl(records){return records.map(record=>JSON.stringify(validateExecutionSnapshot(clone(record)))).join('\n')+(records.length?'\n':'')}
 export function executionSnapshotsFilename(now=new Date()){return `ride-plan-execution-snapshots-${now.toISOString().replace(/[-:]/g,'').replace(/\.\d{3}Z$/,'Z')}.jsonl`}
