@@ -5,7 +5,7 @@
 <meta name="description" content="A personal cycling ride-planning tool that estimates ride duration and reachable distance from aggregated historical ride data.">
 <meta name="application-name" content="Ride Planning Lab"><meta name="apple-mobile-web-app-title" content="Ride Plan Lab">
 <meta name="theme-color" content="#0d4d31"><link rel="manifest" href="./manifest.webmanifest"><link rel="icon" href="./icon-192.png"><link rel="apple-touch-icon" href="./apple-touch-icon.png">
-<link rel="stylesheet" href="./style.css"><link rel="stylesheet" href="./release-info.css?v=ride-planning-ui-v15"><title>Ride Planning Lab</title></head>
+<link rel="stylesheet" href="./style.css"><link rel="stylesheet" href="./release-info.css?v=ride-planning-ui-v16"><title>Ride Planning Lab</title></head>
 <body><header><h1>Ride Planning Lab</h1><span>Cycling Ride Planning Prototype</span></header><main>
 <nav class="mode-nav" aria-label="計算方法"><button data-mode="destination" class="active">目的地までの時間</button><button data-mode="distance">使える時間から距離</button></nav>
 <p class="top-notice">過去の実績に基づく計画の目安です。</p>
@@ -20,7 +20,7 @@
 <strong class="quick-label">出発時刻のクイック選択</strong><div class="presets"><button class="current-time" type="button">◷ 現在時刻</button><button type="button" data-time="05:00">05:00</button><button type="button" data-time="08:00">08:00</button></div>
 <fieldset class="events"><legend>予定イベント・予備時間（任意）</legend><p>計画に含める項目だけチェックしてください。</p><div data-events></div><div class="event buffer-event"><label><input type="checkbox" name="unexpected_enabled" checked><span>バッファ</span></label><label class="minutes"><input type="number" name="unexpected_buffer_minutes" value="20" min="0" step="1" inputmode="numeric"><span>分</span></label></div></fieldset>
 <button class="primary" type="submit"><span aria-hidden="true">▦</span> 走れる距離を計算</button></form></section><div id="distance-result" aria-live="polite"></div></section>
-<details class="snapshot-panel"><summary>実行用計画データ <span id="snapshot-count">確認中</span></summary><p>通常の試算は保存されません。「この計画を実行用に保存」を選んだ計画だけ、この端末内に保存されます。</p><div id="snapshot-list" class="snapshot-list"></div><div class="snapshot-actions"><button id="export-snapshots" class="secondary" type="button">全件エクスポート</button><button id="delete-snapshots" class="secondary danger" type="button">全件削除</button></div><p id="snapshot-management-status" class="snapshot-status" aria-live="polite"></p></details>
+<details class="snapshot-panel"><summary>保存した計画 <span id="snapshot-count">確認中</span></summary><p>保存した計画は「開く」から編集でき、「変更を保存」で更新できます。予測履歴は端末内に保持されます。</p><div id="snapshot-list" class="snapshot-list"></div><div class="snapshot-actions"><button id="export-snapshots" class="secondary" type="button">バックアップ用にエクスポート</button><button id="delete-snapshots" class="secondary danger" type="button">全件削除</button></div><p id="snapshot-management-status" class="snapshot-status" aria-live="polite"></p></details>
 <div id="cache-warning" class="error hidden" role="alert">⚠ キャッシュ不整合の可能性があります。最新版へ更新してください。</div>
 <details class="version-panel"><summary>バージョン・キャッシュ情報</summary><dl>
 <div><dt>UI Version</dt><dd id="ui-version">確認中</dd></div><div><dt>Runtime Version</dt><dd id="runtime-version">確認中</dd></div>
@@ -29,4 +29,4 @@
 <div><dt>Cache更新日時</dt><dd id="cache-updated-at">確認中</dd></div></dl>
 <button id="refresh-assets" class="secondary refresh-assets" type="button">最新版を取得</button><p id="refresh-status" class="version-status" aria-live="polite"></p></details>
 <details class="about"><summary>このツールについて</summary><p>個人用のサイクリング計画ツールです。距離、時刻、イベント時間を端末内で計算します。</p><p>ログインや個人情報の入力は不要で、入力内容を外部へ送信しません。予測は過去の実績に基づく目安であり、帰宅時刻や安全を保証しません。通常停止時間は、予定・例外停止を除いた過去実績から推定しています。</p></details></main>
-<script type="module" src="./app.js?v=ride-planning-ui-v15"></script></body></html>
+<script type="module" src="./app.js?v=ride-planning-ui-v16"></script></body></html>

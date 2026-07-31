@@ -1,5 +1,5 @@
 import {RUNTIME_VERSION, estimateDestination, estimateDistance, validateArtifact} from './runtime/ride_planning_runtime.js';
-import {APP_VERSION, CALCULATION_CONTRACT_VERSION, appendExecutionSnapshot, createExecutionSnapshot, deleteAllExecutionSnapshots, deleteExecutionSnapshot, executionSnapshotsFilename, executionSnapshotsJsonl, loadExecutionSnapshots, sameExecutionSnapshotContent} from './execution_snapshots.js?v=ride-planning-ui-v15';
+import {APP_VERSION, CALCULATION_CONTRACT_VERSION, appendExecutionSnapshot, createExecutionSnapshot, deleteAllExecutionSnapshots, deleteExecutionSnapshot, executionSnapshotsFilename, executionSnapshotsJsonl, loadExecutionSnapshots, sameExecutionSnapshotContent} from './execution_snapshots.js?v=ride-planning-ui-v16';
 
 const presets = [
   ['collection', 'カード収集', 10, true],
@@ -174,7 +174,9 @@ function commonResult(result, primary, supporting, fixed, mode) {
     ${warning(result.warnings)}
     <div class="execution-save">
       <label>計画名（任意）<input data-snapshot-name maxlength="80" autocomplete="off"></label>
-      <button class="secondary" type="button" data-save-snapshot="${mode}">この計画を実行用に保存</button>
+      <p class="plan-context" data-plan-context>新しい計画</p>
+      <button class="secondary" type="button" data-save-plan="${mode}">保存</button>
+      <button class="secondary hidden" type="button" data-save-plan-as-new="${mode}">別の計画として保存</button>
       <p class="snapshot-status" aria-live="polite"></p>
     </div>
   </section>`;
@@ -201,6 +203,168 @@ function reveal(node, html) {
   node.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+const RIDE_PLAN_CATALOG_SCHEMA_VERSION = 'ride-plan-catalog-store-v1';
+const RIDE_PLAN_CATALOG_STORAGE_KEY = 'ride-planning-lab-ride-plans-v1';
+
+const clone = value => JSON.parse(JSON.stringify(value));
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+function newUuid(cryptoObject = globalThis.crypto) {
+  if (cryptoObject?.randomUUID) return cryptoObject.randomUUID();
+  if (!cryptoObject?.getRandomValues) throw new Error('このブラウザでは計画IDを作成できません。');
+  const bytes = cryptoObject.getRandomValues(new Uint8Array(16));
+  bytes[6] = bytes[6] & 15 | 64;
+  bytes[8] = bytes[8] & 63 | 128;
+  return [...bytes].map((value, index) =>
+    (index === 4 || index === 6 || index === 8 || index === 10 ? '-' : '')
+      + value.toString(16).padStart(2, '0')).join('');
+}
+
+function validatePlan(plan) {
+  if (!plan || !uuidPattern.test(plan.ride_plan_id || '')) throw new Error('保存した計画のIDが不正です。');
+  if (typeof plan.title !== 'string' || plan.title.length > 80) throw new Error('保存した計画の名前が不正です。');
+  if (!Array.isArray(plan.execution_snapshot_ids) || !plan.execution_snapshot_ids.length) {
+    throw new Error('保存した計画の履歴が不正です。');
+  }
+  if (!plan.execution_snapshot_ids.every(id => uuidPattern.test(id))) throw new Error('保存した計画の履歴IDが不正です。');
+  if (new Set(plan.execution_snapshot_ids).size !== plan.execution_snapshot_ids.length) throw new Error('保存した計画の履歴が重複しています。');
+  if (plan.current_execution_snapshot_id !== plan.execution_snapshot_ids[plan.execution_snapshot_ids.length - 1]) {
+    throw new Error('保存した計画の現在履歴が不正です。');
+  }
+  for (const key of ['created_at', 'updated_at']) {
+    if (typeof plan[key] !== 'string' || !Number.isFinite(Date.parse(plan[key]))) throw new Error('保存した計画の日時が不正です。');
+  }
+  if (plan.deleted_at !== undefined
+      && (typeof plan.deleted_at !== 'string' || !Number.isFinite(Date.parse(plan.deleted_at)))) {
+    throw new Error('保存した計画の削除日時が不正です。');
+  }
+  return plan;
+}
+
+function validateCatalog(catalog, snapshots) {
+  if (catalog?.schema_version !== RIDE_PLAN_CATALOG_SCHEMA_VERSION || !Array.isArray(catalog.plans)) {
+    throw new Error('保存した計画の一覧形式が不正です。既存データは変更していません。');
+  }
+  const snapshotIds = new Set(snapshots.map(record => record.execution_snapshot_id));
+  const planIds = new Set();
+  const claimed = new Set();
+  catalog.plans.forEach(plan => {
+    validatePlan(plan);
+    if (planIds.has(plan.ride_plan_id)) throw new Error('保存した計画のIDが重複しています。');
+    planIds.add(plan.ride_plan_id);
+    plan.execution_snapshot_ids.forEach(id => {
+      if (!snapshotIds.has(id)) throw new Error('保存した計画が存在しない履歴を参照しています。');
+      if (claimed.has(id)) throw new Error('同じ履歴が複数の計画に含まれています。');
+      claimed.add(id);
+    });
+  });
+  return catalog;
+}
+
+const migrationKey = record => {
+  const name = (record.display_name || '').trim();
+  return name ? `${record.calculation.mode}\n${name.toLocaleLowerCase('ja-JP')}` : null;
+};
+
+function migrateExecutionSnapshotsToRidePlans(snapshots, { cryptoObject = globalThis.crypto } = {}) {
+  const plans = [];
+  const grouped = new Map();
+  snapshots.forEach(record => {
+    const key = migrationKey(record);
+    let plan = key ? grouped.get(key) : undefined;
+    if (!plan) {
+      plan = {
+        ride_plan_id: newUuid(cryptoObject),
+        title: record.display_name || '',
+        created_at: record.created_at,
+        updated_at: record.created_at,
+        current_execution_snapshot_id: record.execution_snapshot_id,
+        execution_snapshot_ids: [],
+      };
+      plans.push(plan);
+      if (key) grouped.set(key, plan);
+    }
+    plan.execution_snapshot_ids.push(record.execution_snapshot_id);
+    plan.current_execution_snapshot_id = record.execution_snapshot_id;
+    plan.updated_at = record.created_at;
+  });
+  return validateCatalog({ schema_version: RIDE_PLAN_CATALOG_SCHEMA_VERSION, plans }, snapshots);
+}
+
+function saveRidePlanCatalog(catalog, snapshots, storage = globalThis.localStorage) {
+  validateCatalog(catalog, snapshots);
+  storage.setItem(RIDE_PLAN_CATALOG_STORAGE_KEY, JSON.stringify(catalog));
+  return clone(catalog);
+}
+
+function loadRidePlanCatalog(snapshots, storage = globalThis.localStorage,
+                                    options = {}) {
+  const raw = storage.getItem(RIDE_PLAN_CATALOG_STORAGE_KEY);
+  if (raw === null) {
+    const migrated = migrateExecutionSnapshotsToRidePlans(snapshots, options);
+    storage.setItem(RIDE_PLAN_CATALOG_STORAGE_KEY, JSON.stringify(migrated));
+    return clone(migrated);
+  }
+  let catalog;
+  try { catalog = JSON.parse(raw); } catch (error) {
+    throw new Error('保存した計画の一覧を読み取れません。既存データは変更していません。');
+  }
+  validateCatalog(catalog, snapshots);
+  const claimed = new Set(catalog.plans.flatMap(plan => plan.execution_snapshot_ids));
+  const orphans = snapshots.filter(record => !claimed.has(record.execution_snapshot_id));
+  if (orphans.length) {
+    const additions = migrateExecutionSnapshotsToRidePlans(orphans, options).plans;
+    catalog = { ...catalog, plans: [...catalog.plans, ...additions] };
+    saveRidePlanCatalog(catalog, snapshots, storage);
+  }
+  return clone(catalog);
+}
+
+function createRidePlan(catalog, snapshot, title,
+                               { cryptoObject = globalThis.crypto } = {}) {
+  const plan = {
+    ride_plan_id: newUuid(cryptoObject),
+    title,
+    created_at: snapshot.created_at,
+    updated_at: snapshot.created_at,
+    current_execution_snapshot_id: snapshot.execution_snapshot_id,
+    execution_snapshot_ids: [snapshot.execution_snapshot_id],
+  };
+  return { ...clone(catalog), plans: [...clone(catalog.plans), plan] };
+}
+
+function updateRidePlan(catalog, ridePlanId, snapshot, title) {
+  let found = false;
+  const plans = catalog.plans.map(plan => {
+    if (plan.ride_plan_id !== ridePlanId || plan.deleted_at) return clone(plan);
+    found = true;
+    return {
+      ...clone(plan),
+      title,
+      updated_at: snapshot.created_at,
+      current_execution_snapshot_id: snapshot.execution_snapshot_id,
+      execution_snapshot_ids: [...plan.execution_snapshot_ids, snapshot.execution_snapshot_id],
+    };
+  });
+  if (!found) throw new Error('保存先の計画が見つかりません。');
+  return { ...clone(catalog), plans };
+}
+
+function removeRidePlan(catalog, ridePlanId, deletedAt = new Date().toISOString()) {
+  let found = false;
+  const plans = catalog.plans.map(plan => {
+    if (plan.ride_plan_id !== ridePlanId || plan.deleted_at) return clone(plan);
+    found = true;
+    return { ...clone(plan), deleted_at: deletedAt };
+  });
+  if (!found) throw new Error('削除する計画が見つかりません。');
+  return { ...clone(catalog), plans };
+}
+
+function deleteRidePlanCatalog(storage = globalThis.localStorage) {
+  storage.removeItem(RIDE_PLAN_CATALOG_STORAGE_KEY);
+}
+
 const escapeSnapshotHtml = value => String(value).replace(/[&<>"']/g, character => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
 }[character]));
@@ -214,8 +378,10 @@ const createdAt = value => new Date(value).toLocaleString('ja-JP', {
   year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
 });
 
-function snapshotHeading(record) {
-  const name = record.display_name || '名称未設定の計画';
+const currentSnapshot = (plan, recordsById) => recordsById.get(plan.current_execution_snapshot_id);
+
+function planHeading(plan, record) {
+  const name = plan.title || '名称未設定の計画';
   const input = record.calculation.input;
   const target = record.calculation.mode === 'distance_to_time'
     ? `${Number(input.distance_km).toFixed(1)} km`
@@ -223,41 +389,50 @@ function snapshotHeading(record) {
   return { name, target };
 }
 
-function renderSnapshotList(records) {
+function renderRidePlanList(catalog, records) {
   const list = document.querySelector('#snapshot-list');
-  if (!records.length) {
-    list.innerHTML = '<p class="snapshot-empty">保存済みの実行用計画はありません。</p>';
+  const visiblePlans = catalog.plans.filter(plan => !plan.deleted_at);
+  if (!visiblePlans.length) {
+    list.innerHTML = '<p class="snapshot-empty">保存した計画はありません。</p>';
     return;
   }
-  list.innerHTML = [...records].reverse().map(record => {
-    const { name, target } = snapshotHeading(record);
+  const recordsById = new Map(records.map(record => [record.execution_snapshot_id, record]));
+  list.innerHTML = visiblePlans.sort((left, right) =>
+    right.updated_at.localeCompare(left.updated_at)).map(plan => {
+    const record = currentSnapshot(plan, recordsById);
+    const { name, target } = planHeading(plan, record);
     const input = record.calculation.input;
     const result = record.calculation.result;
     const mode = record.calculation.mode === 'distance_to_time'
       ? '目的地までの時間' : '使える時間から距離';
-    return `<details class="snapshot-item" data-snapshot-id="${record.execution_snapshot_id}">
-      <summary><span><strong>${escapeSnapshotHtml(name)}</strong><small>${escapeSnapshotHtml(createdAt(record.created_at))}</small></span><b>${escapeSnapshotHtml(target)}</b></summary>
+    return `<details class="snapshot-item" data-ride-plan-id="${plan.ride_plan_id}">
+      <summary><span><strong>${escapeSnapshotHtml(name)}</strong><small>最終保存 ${escapeSnapshotHtml(createdAt(plan.updated_at))}</small></span><b>${escapeSnapshotHtml(target)}</b></summary>
       <dl>
         <div><dt>計算方法</dt><dd>${mode}</dd></div>
         <div><dt>出発時刻</dt><dd>${escapeSnapshotHtml(snapshotClock(input.departure_epoch_sec))}</dd></div>
         <div><dt>標準予測</dt><dd>${Number(result.standard_distance_km).toFixed(1)} km・${Math.round(result.standard_elapsed_sec / 60)}分</dd></div>
-        <div><dt>Snapshot ID</dt><dd class="snapshot-id">${record.execution_snapshot_id}</dd></div>
+        <div><dt>保存履歴</dt><dd>${plan.execution_snapshot_ids.length}件</dd></div>
       </dl>
       <div class="snapshot-item-actions">
-        <button type="button" class="secondary" data-copy-snapshot>コピーして再編集</button>
-        <button type="button" class="secondary danger" data-delete-snapshot>削除</button>
+        <button type="button" class="secondary" data-open-plan>開く</button>
+        <button type="button" class="secondary danger" data-delete-plan>削除</button>
       </div>
     </details>`;
   }).join('');
 }
 
-function updateSnapshotCount(message = '') {
+function loadState() {
+  const records = loadExecutionSnapshots();
+  return { records, catalog: loadRidePlanCatalog(records) };
+}
+
+function updatePlanCount(message = '') {
   const count = document.querySelector('#snapshot-count');
   const status = document.querySelector('#snapshot-management-status');
   try {
-    const records = loadExecutionSnapshots();
-    count.textContent = `${records.length}件`;
-    renderSnapshotList(records);
+    const { records, catalog } = loadState();
+    count.textContent = `${catalog.plans.filter(plan => !plan.deleted_at).length}件`;
+    renderRidePlanList(catalog, records);
     status.textContent = message;
   } catch (error) {
     count.textContent = '読込エラー';
@@ -274,7 +449,7 @@ function applyPlannedEvents(form, plannedEvents) {
   });
 }
 
-function copySnapshotToInputs(record, setSnapshotNameDraft) {
+function openPlan(record, plan, setSnapshotNameDraft) {
   const input = record.calculation.input;
   const destination = record.calculation.mode === 'distance_to_time';
   const mode = destination ? 'destination' : 'distance';
@@ -288,18 +463,43 @@ function copySnapshotToInputs(record, setSnapshotNameDraft) {
   const reserveField = form.elements.unexpected_buffer_minutes;
   form.elements.unexpected_enabled.checked = hasReserve;
   reserveField.value = hasReserve ? input.reserve_time_sec / 60 : reserveField.defaultValue;
-  setSnapshotNameDraft(mode, record.display_name || '');
+  setSnapshotNameDraft(mode, plan.title);
   form.dispatchEvent(new Event('input', { bubbles: true }));
+  form.requestSubmit();
   form.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  document.querySelector('#snapshot-management-status').textContent =
-    '入力欄にコピーしました。内容を確認して再計算してください。';
 }
 
 function initializeSnapshotUi(currentCalculations, reproduction, setSnapshotNameDraft) {
-  document.addEventListener('click', event => {
-    const button = event.target.closest('[data-save-snapshot]');
-    if (!button) return;
-    const context = currentCalculations[button.dataset.saveSnapshot];
+  let activeRidePlanId = null;
+
+  function refreshSaveControls() {
+    document.querySelectorAll('.execution-save').forEach(panel => {
+      const context = panel.querySelector('[data-plan-context]');
+      const save = panel.querySelector('[data-save-plan]');
+      const saveAsNew = panel.querySelector('[data-save-plan-as-new]');
+      if (activeRidePlanId) {
+        let plan;
+        try {
+          const { catalog } = loadState();
+          plan = catalog.plans.find(candidate =>
+            candidate.ride_plan_id === activeRidePlanId && !candidate.deleted_at);
+        } catch (error) {
+          plan = null;
+        }
+        context.textContent = plan ? `編集中: ${plan.title || '名称未設定の計画'}` : '新しい計画';
+        save.textContent = plan ? '変更を保存' : '保存';
+        saveAsNew.classList.toggle('hidden', !plan);
+      } else {
+        context.textContent = '新しい計画';
+        save.textContent = '保存';
+        saveAsNew.classList.add('hidden');
+      }
+    });
+  }
+
+  function savePlan(button, asNew) {
+    const mode = button.dataset.savePlan || button.dataset.savePlanAsNew;
+    const context = currentCalculations[mode];
     const panel = button.closest('.execution-save');
     const status = panel.querySelector('.snapshot-status');
     if (!context) {
@@ -308,48 +508,72 @@ function initializeSnapshotUi(currentCalculations, reproduction, setSnapshotName
     }
     button.disabled = true;
     try {
-      const displayName = panel.querySelector('[data-snapshot-name]').value.trim();
-      const payload = {
-        display_name: displayName,
-        calculation: context.calculation,
-        reproduction: reproduction(),
-      };
-      const records = loadExecutionSnapshots();
-      const latest = records[records.length - 1];
-      if (latest && sameExecutionSnapshotContent(latest, payload)
-          && displayName === (latest.display_name || '')) {
+      const title = panel.querySelector('[data-snapshot-name]').value.trim();
+      const payload = { display_name: title, calculation: context.calculation, reproduction: reproduction() };
+      const { records, catalog } = loadState();
+      const plan = !asNew && activeRidePlanId
+        ? catalog.plans.find(candidate =>
+          candidate.ride_plan_id === activeRidePlanId && !candidate.deleted_at) : null;
+      const previous = plan
+        ? records.find(record => record.execution_snapshot_id === plan.current_execution_snapshot_id) : null;
+      if (previous && sameExecutionSnapshotContent(previous, payload)
+          && title === plan.title) {
         status.textContent = '変更はありません。';
         return;
       }
-      appendExecutionSnapshot(createExecutionSnapshot(payload));
-      status.textContent = '実行用計画を保存しました。';
-      updateSnapshotCount();
+      const snapshot = createExecutionSnapshot(payload);
+      appendExecutionSnapshot(snapshot);
+      const nextRecords = [...records, snapshot];
+      const nextCatalog = plan
+        ? updateRidePlan(catalog, plan.ride_plan_id, snapshot, title)
+        : createRidePlan(catalog, snapshot, title);
+      saveRidePlanCatalog(nextCatalog, nextRecords);
+      activeRidePlanId = plan ? plan.ride_plan_id
+        : nextCatalog.plans[nextCatalog.plans.length - 1].ride_plan_id;
+      status.textContent = plan ? '変更を保存しました。' : '計画を保存しました。';
+      updatePlanCount();
+      refreshSaveControls();
     } catch (error) {
       status.textContent = `保存できませんでした: ${error.message}`;
     } finally {
       button.disabled = false;
     }
+  }
+
+  document.addEventListener('click', event => {
+    const save = event.target.closest('[data-save-plan]');
+    const saveAsNew = event.target.closest('[data-save-plan-as-new]');
+    if (save || saveAsNew) savePlan(save || saveAsNew, Boolean(saveAsNew));
   });
 
   document.querySelector('#snapshot-list').addEventListener('click', event => {
-    const item = event.target.closest('[data-snapshot-id]');
+    const item = event.target.closest('[data-ride-plan-id]');
     if (!item) return;
     try {
-      const record = loadExecutionSnapshots().find(
-        candidate => candidate.execution_snapshot_id === item.dataset.snapshotId,
-      );
-      if (!record) {
-        updateSnapshotCount('対象の実行用計画が見つかりません。');
+      const { records, catalog } = loadState();
+      const plan = catalog.plans.find(candidate =>
+        candidate.ride_plan_id === item.dataset.ridePlanId && !candidate.deleted_at);
+      if (!plan) {
+        updatePlanCount('対象の計画が見つかりません。');
         return;
       }
-      if (event.target.closest('[data-copy-snapshot]')) {
-        copySnapshotToInputs(record, setSnapshotNameDraft);
+      if (event.target.closest('[data-open-plan]')) {
+        const record = records.find(candidate =>
+          candidate.execution_snapshot_id === plan.current_execution_snapshot_id);
+        activeRidePlanId = plan.ride_plan_id;
+        openPlan(record, plan, setSnapshotNameDraft);
+        refreshSaveControls();
+        document.querySelector('#snapshot-management-status').textContent =
+          '計画を開きました。編集後に「変更を保存」を選んでください。';
         return;
       }
-      if (!event.target.closest('[data-delete-snapshot]')) return;
-      if (!confirm(`「${record.display_name || '名称未設定の計画'}」を削除します。元に戻せません。よろしいですか？`)) return;
-      deleteExecutionSnapshot(record.execution_snapshot_id);
-      updateSnapshotCount('実行用計画を削除しました。');
+      if (!event.target.closest('[data-delete-plan]')) return;
+      if (!confirm(`「${plan.title || '名称未設定の計画'}」を削除します。予測履歴は互換データとして保持されます。よろしいですか？`)) return;
+      const nextCatalog = removeRidePlan(catalog, plan.ride_plan_id);
+      saveRidePlanCatalog(nextCatalog, records);
+      if (activeRidePlanId === plan.ride_plan_id) activeRidePlanId = null;
+      updatePlanCount('保存した計画を削除しました。');
+      refreshSaveControls();
     } catch (error) {
       document.querySelector('#snapshot-management-status').textContent =
         `操作できませんでした: ${error.message}`;
@@ -361,7 +585,7 @@ function initializeSnapshotUi(currentCalculations, reproduction, setSnapshotName
     try {
       const records = loadExecutionSnapshots();
       if (!records.length) {
-        status.textContent = '保存済みの実行用計画がありません。';
+        status.textContent = '保存した計画がありません。';
         return;
       }
       const url = URL.createObjectURL(new Blob([executionSnapshotsJsonl(records)], {
@@ -372,23 +596,28 @@ function initializeSnapshotUi(currentCalculations, reproduction, setSnapshotName
       link.download = executionSnapshotsFilename();
       link.click();
       URL.revokeObjectURL(url);
-      status.textContent = `${records.length}件をJSONLで出力しました。`;
+      status.textContent = `${records.length}件の予測履歴を互換JSONLで出力しました。`;
     } catch (error) {
       status.textContent = `出力できませんでした: ${error.message}`;
     }
   });
 
   document.querySelector('#delete-snapshots').addEventListener('click', () => {
-    if (!confirm('保存済みの実行用計画をすべて削除します。元に戻せません。よろしいですか？')) return;
+    if (!confirm('保存した計画と端末内の予測履歴をすべて削除します。元に戻せません。よろしいですか？')) return;
     const status = document.querySelector('#snapshot-management-status');
     try {
       deleteAllExecutionSnapshots();
-      updateSnapshotCount('保存済みの実行用計画をすべて削除しました。');
+      deleteRidePlanCatalog();
+      activeRidePlanId = null;
+      updatePlanCount('保存した計画をすべて削除しました。');
+      refreshSaveControls();
     } catch (error) {
       status.textContent = `削除できませんでした: ${error.message}`;
     }
   });
-  updateSnapshotCount();
+
+  updatePlanCount();
+  return { refreshSaveControls };
 }
 
 let artifact;
@@ -619,6 +848,7 @@ function initializeUpdateManager() {
 
 const currentCalculations = { destination: null, distance: null };
 const snapshotNameDrafts = { destination: '', distance: '' };
+let ridePlanUi;
 
 function rememberSnapshotName(node, mode) {
   const field = node.querySelector('[data-snapshot-name]');
@@ -629,6 +859,7 @@ function revealCalculation(node, html, mode) {
   reveal(node, html);
   const field = node.querySelector('[data-snapshot-name]');
   if (field) field.value = snapshotNameDrafts[mode];
+  ridePlanUi?.refreshSaveControls();
 }
 
 function setSnapshotNameDraft(mode, value) {
@@ -754,5 +985,5 @@ document.querySelector('#distance-form').addEventListener('submit', event => {
 });
 
 initializeInputs(getArtifact);
-initializeSnapshotUi(currentCalculations, reproduction, setSnapshotNameDraft);
+ridePlanUi = initializeSnapshotUi(currentCalculations, reproduction, setSnapshotNameDraft);
 initializeUpdateManager();
