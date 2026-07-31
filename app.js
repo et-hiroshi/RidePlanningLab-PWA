@@ -615,6 +615,18 @@ function initializeUpdateManager() {
 }
 
 const currentCalculations = { destination: null, distance: null };
+const snapshotNameDrafts = { destination: '', distance: '' };
+
+function rememberSnapshotName(node, mode) {
+  const field = node.querySelector('[data-snapshot-name]');
+  if (field) snapshotNameDrafts[mode] = field.value;
+}
+
+function revealCalculation(node, html, mode) {
+  reveal(node, html);
+  const field = node.querySelector('[data-snapshot-name]');
+  if (field) field.value = snapshotNameDrafts[mode];
+}
 
 function destinationCalculation(result, distance, departureEpoch, events, reserveMinutes) {
   return {
@@ -671,6 +683,7 @@ function distanceCalculation(result, departureEpoch, deadlineEpoch, events, rese
 document.querySelector('#destination-form').addEventListener('submit', event => {
   event.preventDefault();
   const node = document.querySelector('#destination-result');
+  rememberSnapshotName(node, 'destination');
   currentCalculations.destination = null;
   try {
     const form = event.currentTarget;
@@ -688,10 +701,10 @@ document.querySelector('#destination-form').addEventListener('submit', event => 
     currentCalculations.destination = destinationCalculation(
       result, distance, departureEpoch, events, reserveMinutes,
     );
-    reveal(node, renderDestinationResult(result, {
+    revealCalculation(node, renderDestinationResult(result, {
       departure_time: departureTime,
       epoch: departureEpoch,
-    }));
+    }), 'destination');
   } catch (error) {
     reveal(node, `<div class="error">${escapeHtml(error.message)}</div>`);
   }
@@ -700,6 +713,7 @@ document.querySelector('#destination-form').addEventListener('submit', event => 
 document.querySelector('#distance-form').addEventListener('submit', event => {
   event.preventDefault();
   const node = document.querySelector('#distance-result');
+  rememberSnapshotName(node, 'distance');
   currentCalculations.distance = null;
   try {
     const form = event.currentTarget;
@@ -721,10 +735,10 @@ document.querySelector('#distance-form').addEventListener('submit', event => {
     currentCalculations.distance = distanceCalculation(
       result, departureEpoch, deadlineEpoch, events, reserveMinutes,
     );
-    reveal(node, renderDistanceResult(result, {
+    revealCalculation(node, renderDistanceResult(result, {
       departure_time: departureTime,
       deadline_time: deadlineTime,
-    }));
+    }), 'distance');
   } catch (error) {
     reveal(node, `<div class="error">${escapeHtml(error.message)}</div>`);
   }
