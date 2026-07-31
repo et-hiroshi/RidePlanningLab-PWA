@@ -1,4 +1,4 @@
-export const RUNTIME_VERSION = 'mobile-ride-planning-practical-runtime-v6';
+export const RUNTIME_VERSION = 'mobile-ride-planning-practical-runtime-v7';
 const SCHEMA = 'mobile-ride-planning-runtime-artifact-v5';
 
 function finite(value, name, allowZero = true) {
@@ -15,11 +15,15 @@ export function validateArtifact(a) {
     throw new Error('予測データと計算runtimeのversionが一致しません。オンライン時に更新してください。');
   }
   finite(a.moving?.median_sec_per_km, 'moving rate', false);
+  const continuousNatural=a.natural?.model==='linear_rate_transition_40_60_then_60_150';
+  const stepNatural=a.natural?.model==='linear_rate_transition_with_100km_band';
   if (!a.natural || a.natural.episode_cap_sec !== 600 ||
-      a.natural.model!=='linear_rate_transition_with_100km_band' ||
+      (!continuousNatural&&!stepNatural) ||
       !Number.isFinite(a.natural.low_sec_per_km)||!Number.isFinite(a.natural.long_sec_per_km)||!Number.isFinite(a.natural.high_sec_per_km)||
       a.natural.low_sec_per_km<0||a.natural.long_sec_per_km<a.natural.low_sec_per_km||a.natural.high_sec_per_km<0||
-      !(a.natural.transition_start_km<a.natural.transition_end_km))
+      !(a.natural.transition_start_km<a.natural.transition_end_km) ||
+      (continuousNatural&&(a.natural.high_rate_transition_start_km!==a.natural.transition_end_km ||
+      !(a.natural.high_rate_transition_start_km<a.natural.high_rate_transition_end_km))))
     throw new Error('Natural予測データが不正です。');
   finite(a.unexpected?.default_sec,'unexpected default');
   if(a.unexpected.user_editable!==true)throw new Error('予備時間設定が不正です。');
@@ -49,8 +53,12 @@ function plannedSeconds(eventMinutes) {
 
 function naturalStop(distance,artifact){
   const n=artifact.natural,start=n.transition_start_km,end=n.transition_end_km;
-  const rate=distance<=start?n.low_sec_per_km:distance>=100?n.high_sec_per_km:distance>=end?n.long_sec_per_km:
-    n.low_sec_per_km+(n.long_sec_per_km-n.low_sec_per_km)*(distance-start)/(end-start);
+  let rate;
+  if(distance<=start)rate=n.low_sec_per_km;
+  else if(distance<end)rate=n.low_sec_per_km+(n.long_sec_per_km-n.low_sec_per_km)*(distance-start)/(end-start);
+  else if(n.model==='linear_rate_transition_40_60_then_60_150'&&distance<n.high_rate_transition_end_km){const weight=(distance-n.high_rate_transition_start_km)/(n.high_rate_transition_end_km-n.high_rate_transition_start_km);rate=n.long_sec_per_km+(n.high_sec_per_km-n.long_sec_per_km)*weight}
+  else if(n.model==='linear_rate_transition_with_100km_band'&&distance<100)rate=n.long_sec_per_km;
+  else rate=n.high_sec_per_km;
   return distance*rate;
 }
 
@@ -115,15 +123,9 @@ function solveContinuous(budget, planned, unexpected, quantile, artifact) {
   const s=artifact.solver;
   if(scenarioTotal(0,planned,unexpected,quantile,artifact)>budget)return 0;
   if(scenarioTotal(s.upper_bound_km,planned,unexpected,quantile,artifact)<=budget)throw new Error('prototype uncertainty search bound remains feasible');
-  const candidates=[];
-  for(const segment of [[0,100-Number.EPSILON*100],[100,s.upper_bound_km]]){
-    let [lo,hi]=segment;
-    if(scenarioTotal(lo,planned,unexpected,quantile,artifact)>budget)continue;
-    if(scenarioTotal(hi,planned,unexpected,quantile,artifact)<=budget){candidates.push(hi);continue}
-    for(let i=0;i<s.maximum_iterations&&hi-lo>s.tolerance_km;i+=1){const mid=(lo+hi)/2;if(scenarioTotal(mid,planned,unexpected,quantile,artifact)<=budget)lo=mid;else hi=mid}
-    candidates.push(lo);
-  }
-  return candidates.length?Math.max(...candidates):0;
+  let lo=0,hi=s.upper_bound_km;
+  for(let i=0;i<s.maximum_iterations&&hi-lo>s.tolerance_km;i+=1){const mid=(lo+hi)/2;if(scenarioTotal(mid,planned,unexpected,quantile,artifact)<=budget)lo=mid;else hi=mid}
+  return lo;
 }
 
 export function estimateDistance(input, rawArtifact) {

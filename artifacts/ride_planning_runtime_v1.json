@@ -11,7 +11,6 @@
     "median_sec_per_km": 172.76559200337886
   },
   "natural": {
-    "100km_plus_runtime_policy": "fixed_50_sec_per_km_strict_past_walk_forward_v1",
     "episode_cap_sec": 600,
     "estimator_version": "distance-band-median-rate-natural-release-v1",
     "fallback_used_by_band": {
@@ -19,11 +18,14 @@
       "50_to_100_km": false,
       "under_50_km": false
     },
+    "high_rate_transition_end_km": 150.0,
+    "high_rate_transition_start_km": 60.0,
     "high_sec_per_km": 50.0,
+    "long_distance_runtime_policy": "linear_57_to_50_sec_per_km_60_to_150_v1",
     "long_sec_per_km": 57.00743296739864,
     "low_sec_per_km": 33.87646482294287,
     "minimum_band_samples": 10,
-    "model": "linear_rate_transition_with_100km_band",
+    "model": "linear_rate_transition_40_60_then_60_150",
     "observed_100km_plus_sec_per_km": 47.93184941764534,
     "sample_count_by_band": {
       "100_km_and_over": 52,
@@ -35,7 +37,7 @@
   },
   "product_identity": "ride-planning-lab",
   "prototype_status": "personal_use_operational_natural_release",
-  "runtime_version": "mobile-ride-planning-practical-runtime-v6",
+  "runtime_version": "mobile-ride-planning-practical-runtime-v7",
   "schema_version": "mobile-ride-planning-runtime-artifact-v5",
   "solver": {
     "maximum_iterations": 80,
@@ -44,13 +46,13 @@
   },
   "source_identity": {
     "natural_actual_contract": "session-nonmoving-minus-confirmed-planned-then-per-stop-episode-10min-cap-v2",
-    "operational_release_id": "natural-100km-rate-50-v1",
+    "operational_release_id": "natural-60-150-continuous-rate-v1",
     "operational_release_schema": "ride-planning-pwa-operational-artifact-v1",
-    "operational_release_sha256": "f0b4e210d4dabe4f35c19d61b359558165e55334d56b55a950d30befbda2c769",
+    "operational_release_sha256": "f0333d8c5ee9fea9daa4896d76d9b332c49890b160c31e6ced0270f96892d01b",
     "practical_artifact_version": "practical-ride-time-estimator-v2.0.0",
     "practical_dataset": "sha256:b5635d9f90d35b37878a7ed02ceaf2f2289c92ad2119a631d245eb890d950561",
     "r059_result": "R059_INCONCLUSIVE",
-    "rollback_release_id": "purified-natural-teacher-100km-human-v2",
+    "rollback_release_id": "natural-100km-rate-50-v1",
     "teacher_contract": "PURIFIED_NATURAL_100KM_HUMAN_V2"
   },
   "uncertainty": {
@@ -84,27 +86,27 @@
       {
         "distance_km": 74.804,
         "fallback_source": "distance_band",
-        "p01_sec": -2999.481495378584,
-        "p025_sec": -2722.6450493760317,
-        "p05_sec": -2349.153767877164,
-        "p10_sec": -1787.4310721283698,
-        "p90_sec": 3559.9391823970095,
-        "p95_sec": 4327.425080536101,
-        "p975_sec": 4597.564890862183,
-        "p99_sec": 5331.355229251565,
+        "p01_sec": -2893.532874997191,
+        "p025_sec": -2519.160156315193,
+        "p05_sec": -2179.1061868257825,
+        "p10_sec": -1683.8942588030702,
+        "p90_sec": 3754.921656170193,
+        "p95_sec": 4612.714941743871,
+        "p975_sec": 4649.573205173162,
+        "p99_sec": 5347.53410074476,
         "sample_count": 83
       },
       {
         "distance_km": 121.383,
         "fallback_source": "distance_band",
-        "p01_sec": -4261.426220188652,
-        "p025_sec": -3397.187388005066,
-        "p05_sec": -3350.479571589465,
-        "p10_sec": -2529.6678320428,
-        "p90_sec": 2397.297251583841,
-        "p95_sec": 2844.056161762637,
-        "p975_sec": 3917.891601436011,
-        "p99_sec": 4951.793616218499,
+        "p01_sec": -4647.486658713818,
+        "p025_sec": -3782.752905788191,
+        "p05_sec": -3368.806703079332,
+        "p10_sec": -2657.101783868002,
+        "p90_sec": 2239.676727983664,
+        "p95_sec": 2563.5556929912054,
+        "p975_sec": 3842.499221878552,
+        "p99_sec": 4754.766145138605,
         "sample_count": 41
       },
       {
@@ -121,7 +123,7 @@
         "sample_count": 11
       }
     ],
-    "interval_version": "moving-natural-component-linear-80-natural-100km-rate-50-v1",
+    "interval_version": "moving-natural-component-linear-80-natural-continuous-60-150-v1",
     "long_distance_warning_km": 150,
     "quantile_levels": [
       0.1,
