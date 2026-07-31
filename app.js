@@ -274,7 +274,7 @@ function applyPlannedEvents(form, plannedEvents) {
   });
 }
 
-function copySnapshotToInputs(record) {
+function copySnapshotToInputs(record, setSnapshotNameDraft) {
   const input = record.calculation.input;
   const destination = record.calculation.mode === 'distance_to_time';
   const mode = destination ? 'destination' : 'distance';
@@ -286,13 +286,14 @@ function copySnapshotToInputs(record) {
   applyPlannedEvents(form, input.planned_events);
   form.elements.unexpected_enabled.checked = input.reserve_time_sec > 0;
   form.elements.unexpected_buffer_minutes.value = input.reserve_time_sec / 60;
+  setSnapshotNameDraft(mode, record.display_name || '');
   form.dispatchEvent(new Event('input', { bubbles: true }));
   form.scrollIntoView({ behavior: 'smooth', block: 'start' });
   document.querySelector('#snapshot-management-status').textContent =
     '入力欄にコピーしました。内容を確認して再計算してください。';
 }
 
-function initializeSnapshotUi(currentCalculations, reproduction) {
+function initializeSnapshotUi(currentCalculations, reproduction, setSnapshotNameDraft) {
   document.addEventListener('click', event => {
     const button = event.target.closest('[data-save-snapshot]');
     if (!button) return;
@@ -340,7 +341,7 @@ function initializeSnapshotUi(currentCalculations, reproduction) {
         return;
       }
       if (event.target.closest('[data-copy-snapshot]')) {
-        copySnapshotToInputs(record);
+        copySnapshotToInputs(record, setSnapshotNameDraft);
         return;
       }
       if (!event.target.closest('[data-delete-snapshot]')) return;
@@ -628,6 +629,12 @@ function revealCalculation(node, html, mode) {
   if (field) field.value = snapshotNameDrafts[mode];
 }
 
+function setSnapshotNameDraft(mode, value) {
+  snapshotNameDrafts[mode] = value;
+  const field = document.querySelector(`#${mode}-result [data-snapshot-name]`);
+  if (field) field.value = value;
+}
+
 function destinationCalculation(result, distance, departureEpoch, events, reserveMinutes) {
   return {
     calculation: {
@@ -745,5 +752,5 @@ document.querySelector('#distance-form').addEventListener('submit', event => {
 });
 
 initializeInputs(getArtifact);
-initializeSnapshotUi(currentCalculations, reproduction);
+initializeSnapshotUi(currentCalculations, reproduction, setSnapshotNameDraft);
 initializeUpdateManager();
