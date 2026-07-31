@@ -1,4 +1,4 @@
-export const RUNTIME_VERSION = 'mobile-ride-planning-practical-runtime-v5';
+export const RUNTIME_VERSION = 'mobile-ride-planning-practical-runtime-v6';
 const SCHEMA = 'mobile-ride-planning-runtime-artifact-v5';
 
 function finite(value, name, allowZero = true) {
@@ -18,7 +18,7 @@ export function validateArtifact(a) {
   if (!a.natural || a.natural.episode_cap_sec !== 600 ||
       a.natural.model!=='linear_rate_transition_with_100km_band' ||
       !Number.isFinite(a.natural.low_sec_per_km)||!Number.isFinite(a.natural.long_sec_per_km)||!Number.isFinite(a.natural.high_sec_per_km)||
-      a.natural.low_sec_per_km<0||a.natural.long_sec_per_km<a.natural.low_sec_per_km||a.natural.high_sec_per_km<a.natural.long_sec_per_km||
+      a.natural.low_sec_per_km<0||a.natural.long_sec_per_km<a.natural.low_sec_per_km||a.natural.high_sec_per_km<0||
       !(a.natural.transition_start_km<a.natural.transition_end_km))
     throw new Error('Natural予測データが不正です。');
   finite(a.unexpected?.default_sec,'unexpected default');
@@ -115,9 +115,15 @@ function solveContinuous(budget, planned, unexpected, quantile, artifact) {
   const s=artifact.solver;
   if(scenarioTotal(0,planned,unexpected,quantile,artifact)>budget)return 0;
   if(scenarioTotal(s.upper_bound_km,planned,unexpected,quantile,artifact)<=budget)throw new Error('prototype uncertainty search bound remains feasible');
-  let lo=0,hi=s.upper_bound_km;
-  for(let i=0;i<s.maximum_iterations&&hi-lo>s.tolerance_km;i+=1){const mid=(lo+hi)/2;if(scenarioTotal(mid,planned,unexpected,quantile,artifact)<=budget)lo=mid;else hi=mid}
-  return lo;
+  const candidates=[];
+  for(const segment of [[0,100-Number.EPSILON*100],[100,s.upper_bound_km]]){
+    let [lo,hi]=segment;
+    if(scenarioTotal(lo,planned,unexpected,quantile,artifact)>budget)continue;
+    if(scenarioTotal(hi,planned,unexpected,quantile,artifact)<=budget){candidates.push(hi);continue}
+    for(let i=0;i<s.maximum_iterations&&hi-lo>s.tolerance_km;i+=1){const mid=(lo+hi)/2;if(scenarioTotal(mid,planned,unexpected,quantile,artifact)<=budget)lo=mid;else hi=mid}
+    candidates.push(lo);
+  }
+  return candidates.length?Math.max(...candidates):0;
 }
 
 export function estimateDistance(input, rawArtifact) {
@@ -125,21 +131,13 @@ export function estimateDistance(input, rawArtifact) {
   const departure = finite(input.departure_epoch_sec, '出発日時');
   const deadline = finite(input.deadline_epoch_sec, '帰宅期限');
   if (deadline <= departure) throw new Error('帰宅期限は出発時刻より後にしてください。');
-  const budget = deadline - departure, planned = plannedSeconds(input.event_minutes || []), unexpected=unexpectedSeconds(input,artifact), s = artifact.solver;
+  const budget = deadline - departure, planned = plannedSeconds(input.event_minutes || []), unexpected=unexpectedSeconds(input,artifact);
   if (planned+unexpected >= budget) return {prototype_max_distance_km:0, moving_time_sec:0,
     natural_stop_time_sec:0,unexpected_buffer_sec:unexpected,planned_event_time_sec:planned,
     residual_nonmoving_time_sec:unexpected, elapsed_time_sec:planned+unexpected,
     warnings:interval(0,unexpected, artifact).warnings, distance_lower_km:0, distance_upper_km:0, available_time_sec:budget,
     moving_lower_sec:0, moving_upper_sec:0, residual_lower_sec:unexpected, residual_upper_sec:unexpected};
-  const total = d => estimateDestination({distance_km:d, departure_epoch_sec:departure, event_minutes:input.event_minutes || [],unexpected_buffer_minutes:unexpected/60}, artifact).elapsed_time_sec;
-  if (total(s.upper_bound_km) <= budget) throw new Error('prototype search upper bound remains feasible');
-  let low = 0, high = s.upper_bound_km, iterations = 0;
-  while (high - low > s.tolerance_km && iterations < s.maximum_iterations) {
-    const middle = (low + high) / 2;
-    if (total(middle) <= budget) low = middle; else high = middle;
-    iterations += 1;
-  }
-  if (high - low > s.tolerance_km) throw new Error('prototype distance solver did not converge');
+  const low=solveContinuous(budget,planned,unexpected,'central',artifact);
   const common={departure_epoch_sec:departure,event_minutes:input.event_minutes||[],unexpected_buffer_minutes:unexpected/60};
   const central = estimateDestination({...common,distance_km:low}, artifact);
   let lower = Math.min(solveContinuous(budget, planned, unexpected, 'p90', artifact), low);
