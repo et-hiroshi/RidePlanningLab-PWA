@@ -1,7 +1,7 @@
-const CACHE = 'ride-planning-lab-f5d6b2e99fb09143';
+const CACHE = 'ride-planning-lab-10480e9f5b0aa841';
 const PREFIX = 'ride-planning-lab-';
 const VERSION = 'ride-planning-service-worker-v2';
-const UPDATED_AT = '2026-08-01T16:44:48+09:00';
+const UPDATED_AT = '2026-08-01T17:16:06+09:00';
 const ASSETS = ["./app.js", "./apple-touch-icon.png", "./artifacts/ride_planning_runtime_v1.json", "./build-info.json", "./execution_snapshots.js", "./icon-192.png", "./icon-512.png", "./index.html", "./manifest.webmanifest", "./release-info.css", "./runtime/ride_planning_runtime.js", "./style.css", "./index.html?v=ride-planning-ui-v16", "./app.js?v=ride-planning-ui-v16", "./execution_snapshots.js?v=ride-planning-ui-v16", "./release-info.css?v=ride-planning-ui-v16"];
 self.addEventListener('install', event => event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS))));
 self.addEventListener('activate', event => event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key.startsWith(PREFIX) && key !== CACHE).map(key => caches.delete(key)))).then(() => self.clients.claim())));

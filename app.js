@@ -206,6 +206,7 @@ function reveal(node, html) {
 const RIDE_PLAN_CATALOG_SCHEMA_VERSION = 'ride-plan-catalog-store-v1';
 const RIDE_PLAN_CATALOG_STORAGE_KEY = 'ride-planning-lab-ride-plans-v1';
 const RIDE_PLAN_CATALOG_EXPORT_SCHEMA_VERSION = 'ride-plan-catalog-export-v1';
+const RIDE_PLANNING_BACKUP_SCHEMA_VERSION = 'ride-planning-backup-v1';
 
 const clone = value => JSON.parse(JSON.stringify(value));
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -279,6 +280,40 @@ function ridePlanCatalogJson(catalog, snapshots, exportedAt) {
 
 function ridePlanCatalogFilename(now = new Date()) {
   return `ride-plan-catalog-${now.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z')}.json`;
+}
+
+function ridePlanningBackupJson(catalog, snapshots, exportedAt = new Date().toISOString()) {
+  const catalogExport = ridePlanCatalogExport(catalog, snapshots, exportedAt);
+  return `${JSON.stringify({
+    schema_version: RIDE_PLANNING_BACKUP_SCHEMA_VERSION,
+    record_type: 'ride_planning_backup',
+    exported_at: exportedAt,
+    execution_snapshots: clone(snapshots),
+    ride_plan_catalog: catalogExport,
+  }, null, 2)}\n`;
+}
+
+function ridePlanningBackupFilename(now = new Date()) {
+  return `ride-planning-backup-${now.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z')}.json`;
+}
+
+function parseRidePlanningBackupJson(text) {
+  let value;
+  try { value = JSON.parse(text); } catch (error) {
+    throw new Error('バックアップファイルを読み取れません。既存データは変更していません。');
+  }
+  if (value?.schema_version !== RIDE_PLANNING_BACKUP_SCHEMA_VERSION
+      || value.record_type !== 'ride_planning_backup') {
+    throw new Error('Ride Reviewに必要なバックアップ形式ではありません。既存データは変更していません。');
+  }
+  if (!Array.isArray(value.execution_snapshots) || !value.execution_snapshots.length) {
+    throw new Error('バックアップに予測履歴が含まれていません。Ride Reviewに必要なバックアップではありません。');
+  }
+  if (!value.ride_plan_catalog) {
+    throw new Error('バックアップに保存した計画の情報が含まれていません。Ride Reviewに必要なバックアップではありません。');
+  }
+  validateCatalog(value.ride_plan_catalog.catalog, value.execution_snapshots);
+  return clone(value);
 }
 
 function importRidePlanCatalogJson(text, snapshots, storage = globalThis.localStorage) {
@@ -644,7 +679,7 @@ function initializeSnapshotUi(currentCalculations, reproduction, setSnapshotName
     }
   });
 
-  document.querySelector('#export-snapshots').addEventListener('click', () => {
+  document.querySelector('#export-backup').addEventListener('click', () => {
     const status = document.querySelector('#snapshot-management-status');
     try {
       const records = loadExecutionSnapshots();
@@ -652,68 +687,34 @@ function initializeSnapshotUi(currentCalculations, reproduction, setSnapshotName
         status.textContent = '保存した計画がありません。';
         return;
       }
-      const url = URL.createObjectURL(new Blob([executionSnapshotsJsonl(records)], {
-        type: 'application/x-ndjson;charset=utf-8',
+      const { catalog } = loadState();
+      const url = URL.createObjectURL(new Blob([ridePlanningBackupJson(catalog, records)], {
+        type: 'application/json;charset=utf-8',
       }));
       const link = document.createElement('a');
       link.href = url;
-      link.download = executionSnapshotsFilename();
+      link.download = ridePlanningBackupFilename();
       link.click();
       URL.revokeObjectURL(url);
-      status.textContent = `${records.length}件の予測履歴を互換JSONLで出力しました。`;
+      status.textContent = `${catalog.plans.length}件の保存した計画をバックアップしました。`;
     } catch (error) {
       status.textContent = `出力できませんでした: ${error.message}`;
     }
   });
 
-  document.querySelector('#import-snapshots').addEventListener('change', async event => {
+  document.querySelector('#import-backup').addEventListener('change', async event => {
     const status = document.querySelector('#snapshot-management-status');
     const file = event.target.files?.[0];
     if (!file) return;
     try {
-      const result = importExecutionSnapshotsJsonl(await file.text());
-      updatePlanCount(`予測履歴を${result.imported}件復元しました（重複${result.duplicate}件）。続けてRidePlan一覧JSONを復元してください。`);
-    } catch (error) {
-      status.textContent = `予測履歴を復元できませんでした: ${error.message}`;
-    } finally {
-      event.target.value = '';
-    }
-  });
-
-  document.querySelector('#export-ride-plan-catalog').addEventListener('click', () => {
-    const status = document.querySelector('#snapshot-management-status');
-    try {
-      const { records, catalog } = loadState();
-      if (!catalog.plans.length) {
-        status.textContent = '保存した計画がありません。';
-        return;
-      }
-      const url = URL.createObjectURL(new Blob([ridePlanCatalogJson(catalog, records)], {
-        type: 'application/json;charset=utf-8',
-      }));
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = ridePlanCatalogFilename();
-      link.click();
-      URL.revokeObjectURL(url);
-      status.textContent = `${catalog.plans.length}件のRidePlan一覧を出力しました。予測履歴JSONLも一緒に保管してください。`;
-    } catch (error) {
-      status.textContent = `RidePlan一覧を出力できませんでした: ${error.message}`;
-    }
-  });
-
-  document.querySelector('#import-ride-plan-catalog').addEventListener('change', async event => {
-    const status = document.querySelector('#snapshot-management-status');
-    const file = event.target.files?.[0];
-    if (!file) return;
-    try {
-      const records = loadExecutionSnapshots();
-      const catalog = importRidePlanCatalogJson(await file.text(), records);
+      const backup = parseRidePlanningBackupJson(await file.text());
+      const result = importExecutionSnapshotsJsonl(executionSnapshotsJsonl(backup.execution_snapshots));
+      const catalog = importRidePlanCatalogJson(JSON.stringify(backup.ride_plan_catalog), loadExecutionSnapshots());
       activeRidePlanId = null;
-      updatePlanCount(`${catalog.plans.filter(plan => !plan.deleted_at).length}件のRidePlan一覧を復元しました。`);
+      updatePlanCount(`${catalog.plans.filter(plan => !plan.deleted_at).length}件の保存した計画を復元しました（予測履歴 新規${result.imported}件）。`);
       refreshSaveControls();
     } catch (error) {
-      status.textContent = `RidePlan一覧を復元できませんでした: ${error.message}`;
+      status.textContent = `復元できませんでした: ${error.message}`;
     } finally {
       event.target.value = '';
     }
