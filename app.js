@@ -1,5 +1,5 @@
 import {RUNTIME_VERSION, estimateDestination, estimateDistance, validateArtifact} from './runtime/ride_planning_runtime.js';
-import {APP_VERSION, CALCULATION_CONTRACT_VERSION, appendExecutionSnapshot, createExecutionSnapshot, deleteAllExecutionSnapshots, deleteExecutionSnapshot, executionSnapshotsFilename, executionSnapshotsJsonl, loadExecutionSnapshots, sameExecutionSnapshotContent} from './execution_snapshots.js?v=ride-planning-ui-v16';
+import {APP_VERSION, CALCULATION_CONTRACT_VERSION, appendExecutionSnapshot, createExecutionSnapshot, deleteAllExecutionSnapshots, deleteExecutionSnapshot, executionSnapshotsFilename, executionSnapshotsJsonl, loadExecutionSnapshots, sameExecutionSnapshotContent} from './execution_snapshots.js?v=ride-planning-ui-v17';
 
 const presets = [
   ['collection', 'カード収集', 10, true],
@@ -706,6 +706,8 @@ function initializeSnapshotUi(currentCalculations, reproduction, setSnapshotName
     const status = document.querySelector('#snapshot-management-status');
     const file = event.target.files?.[0];
     if (!file) return;
+    const previousSnapshots = localStorage.getItem(SNAPSHOT_STORAGE_KEY);
+    const previousCatalog = localStorage.getItem(RIDE_PLAN_CATALOG_STORAGE_KEY);
     try {
       const backup = parseRidePlanningBackupJson(await file.text());
       const result = importExecutionSnapshotsJsonl(executionSnapshotsJsonl(backup.execution_snapshots));
@@ -714,6 +716,10 @@ function initializeSnapshotUi(currentCalculations, reproduction, setSnapshotName
       updatePlanCount(`${catalog.plans.filter(plan => !plan.deleted_at).length}件の保存した計画を復元しました（予測履歴 新規${result.imported}件）。`);
       refreshSaveControls();
     } catch (error) {
+      if (previousSnapshots === null) localStorage.removeItem(SNAPSHOT_STORAGE_KEY);
+      else localStorage.setItem(SNAPSHOT_STORAGE_KEY, previousSnapshots);
+      if (previousCatalog === null) localStorage.removeItem(RIDE_PLAN_CATALOG_STORAGE_KEY);
+      else localStorage.setItem(RIDE_PLAN_CATALOG_STORAGE_KEY, previousCatalog);
       status.textContent = `復元できませんでした: ${error.message}`;
     } finally {
       event.target.value = '';
