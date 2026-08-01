@@ -74,3 +74,14 @@ export function deleteExecutionSnapshot(executionSnapshotId,storage=globalThis.l
 export function deleteAllExecutionSnapshots(storage=globalThis.localStorage){readEnvelope(storage);storage.removeItem(SNAPSHOT_STORAGE_KEY)}
 export function executionSnapshotsJsonl(records){return records.map(record=>JSON.stringify(validateExecutionSnapshot(clone(record)))).join('\n')+(records.length?'\n':'')}
 export function executionSnapshotsFilename(now=new Date()){return `ride-plan-execution-snapshots-${now.toISOString().replace(/[-:]/g,'').replace(/\.\d{3}Z$/,'Z')}.jsonl`}
+export function importExecutionSnapshotsJsonl(text,storage=globalThis.localStorage){
+  if(typeof text!=='string')throw new Error('予測履歴JSONLを読み取れません。既存データは変更していません。');
+  const lines=text.split(/\r?\n/).filter(line=>line.trim());
+  const incoming=[];
+  try{lines.forEach(line=>incoming.push(validateExecutionSnapshot(JSON.parse(line))))}catch(error){throw new Error(`予測履歴JSONLが不正です。既存データは変更していません: ${error.message}`)}
+  const envelope=readEnvelope(storage),byId=new Map(envelope.records.map(record=>[record.execution_snapshot_id,record]));
+  let imported=0,duplicate=0;
+  incoming.forEach(record=>{const existing=byId.get(record.execution_snapshot_id);if(existing){if(JSON.stringify(canonical(existing))!==JSON.stringify(canonical(record)))throw new Error('同じSnapshot IDに異なる内容があります。既存データは変更していません。');duplicate++;return}byId.set(record.execution_snapshot_id,clone(record));imported++});
+  storage.setItem(SNAPSHOT_STORAGE_KEY,JSON.stringify({schema_version:SNAPSHOT_STORE_SCHEMA_VERSION,records:[...byId.values()]}));
+  return {imported,duplicate,total:byId.size};
+}

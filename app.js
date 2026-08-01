@@ -205,6 +205,7 @@ function reveal(node, html) {
 
 const RIDE_PLAN_CATALOG_SCHEMA_VERSION = 'ride-plan-catalog-store-v1';
 const RIDE_PLAN_CATALOG_STORAGE_KEY = 'ride-planning-lab-ride-plans-v1';
+const RIDE_PLAN_CATALOG_EXPORT_SCHEMA_VERSION = 'ride-plan-catalog-export-v1';
 
 const clone = value => JSON.parse(JSON.stringify(value));
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -259,6 +260,69 @@ function validateCatalog(catalog, snapshots) {
     });
   });
   return catalog;
+}
+
+function ridePlanCatalogExport(catalog, snapshots, exportedAt = new Date().toISOString()) {
+  validateCatalog(catalog, snapshots);
+  if (!Number.isFinite(Date.parse(exportedAt))) throw new Error('バックアップ日時が不正です。');
+  return {
+    schema_version: RIDE_PLAN_CATALOG_EXPORT_SCHEMA_VERSION,
+    record_type: 'ride_plan_catalog',
+    exported_at: exportedAt,
+    catalog: clone(catalog),
+  };
+}
+
+function ridePlanCatalogJson(catalog, snapshots, exportedAt) {
+  return `${JSON.stringify(ridePlanCatalogExport(catalog, snapshots, exportedAt), null, 2)}\n`;
+}
+
+function ridePlanCatalogFilename(now = new Date()) {
+  return `ride-plan-catalog-${now.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z')}.json`;
+}
+
+function importRidePlanCatalogJson(text, snapshots, storage = globalThis.localStorage) {
+  let value;
+  try { value = JSON.parse(text); } catch (error) {
+    throw new Error('RidePlanバックアップを読み取れません。既存データは変更していません。');
+  }
+  if (value?.schema_version !== RIDE_PLAN_CATALOG_EXPORT_SCHEMA_VERSION
+      || value.record_type !== 'ride_plan_catalog'
+      || !Number.isFinite(Date.parse(value.exported_at))) {
+    throw new Error('RidePlanバックアップ形式が不正です。既存データは変更していません。');
+  }
+  validateCatalog(value.catalog, snapshots);
+  const storedCatalog = storage.getItem(RIDE_PLAN_CATALOG_STORAGE_KEY);
+  const existing = storedCatalog === null
+    ? {schema_version: RIDE_PLAN_CATALOG_SCHEMA_VERSION, plans: []}
+    : loadRidePlanCatalog(snapshots, storage);
+  const merged = clone(existing);
+  const byId = new Map(merged.plans.map(plan => [plan.ride_plan_id, plan]));
+  for (const imported of value.catalog.plans) {
+    const current = byId.get(imported.ride_plan_id);
+    if (!current) {
+      const added = clone(imported);
+      merged.plans.push(added);
+      byId.set(added.ride_plan_id, added);
+      continue;
+    }
+    if (current.created_at !== imported.created_at) {
+      throw new Error('同じRidePlan IDの作成日時が異なります。既存データは変更していません。');
+    }
+    const shorter = current.execution_snapshot_ids.length <= imported.execution_snapshot_ids.length
+      ? current : imported;
+    const longer = shorter === current ? imported : current;
+    if (!shorter.execution_snapshot_ids.every((id, index) => longer.execution_snapshot_ids[index] === id)) {
+      throw new Error('同じRidePlan IDの保存履歴が分岐しています。既存データは変更していません。');
+    }
+    const chosen = current.execution_snapshot_ids.length === imported.execution_snapshot_ids.length
+      ? (Date.parse(imported.updated_at) > Date.parse(current.updated_at) ? imported : current)
+      : longer;
+    Object.assign(current, clone(chosen));
+  }
+  validateCatalog(merged, snapshots);
+  saveRidePlanCatalog(merged, snapshots, storage);
+  return clone(merged);
 }
 
 const migrationKey = record => {
@@ -599,6 +663,59 @@ function initializeSnapshotUi(currentCalculations, reproduction, setSnapshotName
       status.textContent = `${records.length}件の予測履歴を互換JSONLで出力しました。`;
     } catch (error) {
       status.textContent = `出力できませんでした: ${error.message}`;
+    }
+  });
+
+  document.querySelector('#import-snapshots').addEventListener('change', async event => {
+    const status = document.querySelector('#snapshot-management-status');
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const result = importExecutionSnapshotsJsonl(await file.text());
+      updatePlanCount(`予測履歴を${result.imported}件復元しました（重複${result.duplicate}件）。続けてRidePlan一覧JSONを復元してください。`);
+    } catch (error) {
+      status.textContent = `予測履歴を復元できませんでした: ${error.message}`;
+    } finally {
+      event.target.value = '';
+    }
+  });
+
+  document.querySelector('#export-ride-plan-catalog').addEventListener('click', () => {
+    const status = document.querySelector('#snapshot-management-status');
+    try {
+      const { records, catalog } = loadState();
+      if (!catalog.plans.length) {
+        status.textContent = '保存した計画がありません。';
+        return;
+      }
+      const url = URL.createObjectURL(new Blob([ridePlanCatalogJson(catalog, records)], {
+        type: 'application/json;charset=utf-8',
+      }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = ridePlanCatalogFilename();
+      link.click();
+      URL.revokeObjectURL(url);
+      status.textContent = `${catalog.plans.length}件のRidePlan一覧を出力しました。予測履歴JSONLも一緒に保管してください。`;
+    } catch (error) {
+      status.textContent = `RidePlan一覧を出力できませんでした: ${error.message}`;
+    }
+  });
+
+  document.querySelector('#import-ride-plan-catalog').addEventListener('change', async event => {
+    const status = document.querySelector('#snapshot-management-status');
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const records = loadExecutionSnapshots();
+      const catalog = importRidePlanCatalogJson(await file.text(), records);
+      activeRidePlanId = null;
+      updatePlanCount(`${catalog.plans.filter(plan => !plan.deleted_at).length}件のRidePlan一覧を復元しました。`);
+      refreshSaveControls();
+    } catch (error) {
+      status.textContent = `RidePlan一覧を復元できませんでした: ${error.message}`;
+    } finally {
+      event.target.value = '';
     }
   });
 
