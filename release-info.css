@@ -95,6 +95,16 @@
   gap:8px
 }
 
+.snapshot-actions .button {
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  margin:0;
+  padding:6px 8px;
+  text-align:center;
+  cursor:pointer
+}
+
 .snapshot-actions .danger {
   border-color:#8c1d18;
   color:#8c1d18
