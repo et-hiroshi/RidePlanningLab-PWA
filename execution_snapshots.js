@@ -1,4 +1,4 @@
-export const APP_VERSION='ride-planning-ui-v20';
+export const APP_VERSION='ride-planning-ui-v21';
 export const SNAPSHOT_SCHEMA_VERSION='ride-plan-execution-snapshot-v1';
 export const SNAPSHOT_RECORD_TYPE='ride_plan_execution_snapshot';
 export const SNAPSHOT_STORE_SCHEMA_VERSION='ride-plan-execution-snapshot-store-v1';

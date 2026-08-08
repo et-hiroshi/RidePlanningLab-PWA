@@ -1,5 +1,5 @@
 import {RUNTIME_VERSION, estimateDestination, estimateDistance, validateArtifact} from './runtime/ride_planning_runtime.js';
-import {APP_VERSION, CALCULATION_CONTRACT_VERSION, appendExecutionSnapshot, createExecutionSnapshot, deleteAllExecutionSnapshots, deleteExecutionSnapshot, executionSnapshotsFilename, executionSnapshotsJsonl, loadExecutionSnapshots, sameExecutionSnapshotContent} from './execution_snapshots.js?v=ride-planning-ui-v20';
+import {APP_VERSION, CALCULATION_CONTRACT_VERSION, appendExecutionSnapshot, createExecutionSnapshot, deleteAllExecutionSnapshots, deleteExecutionSnapshot, executionSnapshotsFilename, executionSnapshotsJsonl, loadExecutionSnapshots, sameExecutionSnapshotContent} from './execution_snapshots.js?v=ride-planning-ui-v21';
 
 const presets = [
   ['collection', 'カード収集', 10, true],
@@ -1201,6 +1201,65 @@ function estimateSimpleDistance(input, settings) {
   };
 }
 
+const QUICK_RETURN_SPEED_KMH = 16;
+
+function nonnegative(value, label) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < 0) throw new Error(`${label}は0以上で入力してください。`);
+  return number;
+}
+
+function estimateQuickReturn(distanceKm, extraMinutes = 0, now = new Date()) {
+  const distance = nonnegative(distanceKm, '残距離');
+  const extra = nonnegative(extraMinutes, '予定停止・余裕時間');
+  if (!(now instanceof Date) || Number.isNaN(now.getTime())) throw new Error('現在時刻を取得できません。');
+  const remainingMinutes = distance / QUICK_RETURN_SPEED_KMH * 60 + extra;
+  return {
+    arrivalAt: new Date(now.getTime() + remainingMinutes * 60000),
+    remainingMinutes,
+  };
+}
+
+function quickReturnClock(date) {
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
+function quickReturnDuration(minutes) {
+  const rounded = Math.round(minutes);
+  const hours = Math.floor(rounded / 60);
+  const rest = rounded % 60;
+  return hours ? `${hours}時間${rest}分` : `${rest}分`;
+}
+
+function initializeQuickReturn(now = () => new Date()) {
+  const form = document.querySelector('#quick-return-form');
+  const arrival = document.querySelector('#quick-return-arrival');
+  const remaining = document.querySelector('#quick-return-duration');
+  const error = document.querySelector('#quick-return-error');
+  if (!form || !arrival || !remaining || !error) return;
+  const update = () => {
+    try {
+      if (!form.checkValidity()) throw new Error('残距離と時間を確認してください。');
+      const result = estimateQuickReturn(
+        form.elements.remaining_distance_km.value,
+        form.elements.extra_minutes.value,
+        now(),
+      );
+      arrival.textContent = `帰宅予想 ${quickReturnClock(result.arrivalAt)}`;
+      remaining.textContent = `残り約${quickReturnDuration(result.remainingMinutes)}`;
+      error.textContent = '';
+      error.classList.add('hidden');
+    } catch (reason) {
+      arrival.textContent = '帰宅予想 —';
+      remaining.textContent = '残り時間を計算できません';
+      error.textContent = reason.message;
+      error.classList.remove('hidden');
+    }
+  };
+  form.addEventListener('input', update);
+  update();
+}
+
 const currentCalculations = { destination: null, distance: null };
 const snapshotNameDrafts = { destination: '', distance: '' };
 let ridePlanUi;
@@ -1382,9 +1441,10 @@ document.querySelector('#distance-form').addEventListener('submit', event => {
 initializeInputs(getArtifact);
 ridePlanUi = initializeSnapshotUi(currentCalculations, reproduction, setSnapshotNameDraft);
 initializeUpdateManager();
+initializeQuickReturn();
 
 function showSection(name) {
-  ['calculator', 'settings', 'graph'].forEach(section => {
+  ['calculator', 'quick-return', 'settings', 'graph'].forEach(section => {
     document.querySelector(`#${section}-section`).classList.toggle('hidden', section !== name);
   });
   document.querySelectorAll('.section-nav button').forEach(button => {

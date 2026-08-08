@@ -5,9 +5,9 @@
 <meta name="description" content="A personal cycling ride-planning tool that estimates ride duration and reachable distance from aggregated historical ride data.">
 <meta name="application-name" content="Ride Planning Lab"><meta name="apple-mobile-web-app-title" content="Ride Plan Lab">
 <meta name="theme-color" content="#0d4d31"><link rel="manifest" href="./manifest.webmanifest"><link rel="icon" href="./icon-192.png"><link rel="apple-touch-icon" href="./apple-touch-icon.png">
-<link rel="stylesheet" href="./style.css"><link rel="stylesheet" href="./release-info.css?v=ride-planning-ui-v20"><title>Ride Planning Lab</title></head>
+<link rel="stylesheet" href="./style.css"><link rel="stylesheet" href="./release-info.css?v=ride-planning-ui-v21"><title>Ride Planning Lab</title></head>
 <body><header><h1>Ride Planning Lab</h1><span>Cycling Ride Planning Prototype</span></header><main>
-<nav class="section-nav" aria-label="画面"><button type="button" class="active" data-section="calculator">計算</button><button type="button" data-section="settings">モデル設定</button><button type="button" data-section="graph">モデルグラフ</button></nav>
+<nav class="section-nav" aria-label="画面"><button type="button" class="active" data-section="calculator">計算</button><button type="button" class="quick-return-link" data-section="quick-return">帰宅予想</button><button type="button" data-section="settings">モデル設定</button><button type="button" data-section="graph">モデルグラフ</button></nav>
 <section id="calculator-section">
 <nav class="mode-nav" aria-label="計算方法"><button data-mode="destination" class="active">目的地までの時間</button><button data-mode="distance">使える時間から距離</button></nav>
 <p class="top-notice">過去の実績に基づく計画の目安です。</p>
@@ -25,6 +25,7 @@
 <button class="primary" type="submit"><span aria-hidden="true">▦</span> 走れる距離を計算</button></form></section><div id="distance-result" aria-live="polite"></div></section>
 <details class="snapshot-panel"><summary>保存した計画 <span id="snapshot-count">確認中</span></summary><p>保存した計画は「開く」から編集でき、「変更を保存」で更新できます。バックアップには計画と予測履歴がすべて含まれます。</p><div id="snapshot-list" class="snapshot-list"></div><div class="snapshot-actions"><button id="export-backup" class="secondary" type="button">バックアップ用にエクスポート</button><label class="button secondary" for="import-backup">バックアップから復元</label><input id="import-backup" class="visually-hidden" type="file" accept="application/json,.json"><button id="delete-snapshots" class="secondary danger" type="button">全件削除</button></div><p id="snapshot-management-status" class="snapshot-status" aria-live="polite"></p></details>
 </section>
+<section id="quick-return-section" class="hidden"><section class="panel quick-return-panel"><button class="secondary back-to-calculator" type="button">← 計算画面へ戻る</button><h1>実走中の帰宅予想</h1><p class="quick-return-lead">残距離を入れるだけで、今からの帰宅時刻を確認できます。</p><form id="quick-return-form"><label>残距離 km<input name="remaining_distance_km" value="25" type="number" min="0" step="0.1" inputmode="decimal" required></label><label>予定停止・余裕時間 分（任意）<input name="extra_minutes" value="0" type="number" min="0" step="1" inputmode="numeric" required></label></form><section class="quick-return-result" aria-live="polite"><strong id="quick-return-arrival">帰宅予想 —</strong><span id="quick-return-duration">残り時間を計算中</span></section><p id="quick-return-error" class="error hidden" role="alert"></p><p class="quick-return-note">通常走行＋通常の短い停止を含む過去実績から16km/h換算</p><p class="quick-return-caution">天候・体調・道路状況により前後します。安全に余裕を持って利用してください。</p></section></section>
 <section id="settings-section" class="hidden"><section class="panel model-panel"><h1>モデル設定</h1><p>簡易モデルだけに適用します。変更はこの端末内に保存され、計算とグラフへ即時反映されます。</p><form id="simple-settings-form">
 <label>基準速度（km/h）<input name="speed_kmh" type="number" min="0.1" step="0.1" inputmode="decimal" required></label>
 <div class="settings-grid"><label>P10固定幅（分）<input name="p10_fixed_min" type="number" min="0" step="5" inputmode="decimal" required></label><label>P10距離係数（分/km）<input name="p10_per_km_min" type="number" min="0" step="0.05" inputmode="decimal" required></label><label>P90固定幅（分）<input name="p90_fixed_min" type="number" min="0" step="5" inputmode="decimal" required></label><label>P90距離係数（分/km）<input name="p90_per_km_min" type="number" min="0" step="0.05" inputmode="decimal" required></label></div>
@@ -39,4 +40,4 @@
 <div><dt>Cache更新日時</dt><dd id="cache-updated-at">確認中</dd></div></dl>
 <button id="refresh-assets" class="secondary refresh-assets" type="button">最新版を取得</button><p id="refresh-status" class="version-status" aria-live="polite"></p></details>
 <details class="about"><summary>このツールについて</summary><p>個人用のサイクリング計画ツールです。距離、時刻、イベント時間を端末内で計算します。</p><p>ログインや個人情報の入力は不要で、入力内容を外部へ送信しません。予測は過去の実績に基づく目安であり、帰宅時刻や安全を保証しません。通常停止時間は、予定・例外停止を除いた過去実績から推定しています。</p></details></main>
-<script type="module" src="./app.js?v=ride-planning-ui-v20"></script></body></html>
+<script type="module" src="./app.js?v=ride-planning-ui-v21"></script></body></html>
