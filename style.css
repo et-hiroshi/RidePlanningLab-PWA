@@ -57,30 +57,26 @@ main {
   white-space:nowrap;
   border:0
 }
-.mode-nav {
-  display:grid;
-  grid-template-columns:minmax(0,1fr) minmax(0,1fr);
-  gap:8px;
-  margin-bottom:14px
-}
-.section-nav {
+.primary-nav {
   display:grid;
   grid-template-columns:repeat(3,minmax(0,1fr));
-  gap:6px;
-  margin-bottom:12px
+  gap:7px;
+  margin-bottom:14px
 }
-.section-nav button {
-  min-height:40px;
-  padding:7px 4px;
+.primary-nav button {
+  min-height:52px;
+  padding:9px 4px;
   border:1px solid var(--line);
-  border-radius:9px;
+  border-radius:11px;
   background:#fff;
   color:var(--brand);
+  font-size:.95rem;
   font-weight:700
 }
-.section-nav button.active {
+.primary-nav button.active {
   border-color:var(--brand);
-  background:var(--soft)
+  background:var(--brand);
+  color:#fff
 }
 .model-selector {
   display:grid;
@@ -109,7 +105,7 @@ main {
   grid-column:1/-1;
   color:var(--muted)
 }
-.mode-nav button,.presets button,.secondary {
+.presets button,.secondary {
   min-width:0;
   min-height:44px;
   border:1px solid var(--brand);
@@ -119,10 +115,6 @@ main {
   font-weight:700;
   overflow-wrap:anywhere;
   white-space:normal
-}
-.mode-nav .active {
-  background:var(--brand);
-  color:#fff
 }
 .panel,.result {
   width:100%;
@@ -172,10 +164,6 @@ main {
 }
 .formula code {
   white-space:normal
-}
-.back-to-calculator {
-  width:100%;
-  margin-bottom:14px
 }
 .chart-wrap {
   width:100%;
@@ -467,9 +455,6 @@ footer {
   font-size:.78rem
 }
 @media(max-width:430px) {
-  .mode-nav {
-    font-size:.88rem
-  }
   .basic-inputs {
     gap:8px
   }
@@ -489,28 +474,27 @@ footer {
   .fixed strong {
     font-size:.92rem
   }
-  .section-nav {
-    font-size:.82rem
+  .primary-nav {
+    gap:5px
+  }
+  .primary-nav button {
+    padding-inline:2px;
+    font-size:.86rem
   }
   .settings-grid {
     grid-template-columns:1fr
   }
 
 }
-.quick-return-link {
-  background: #f0b429;
-  color: #163326;
-  font-weight: 800;
-}
 .quick-return-panel {
   max-width: 560px;
   margin: 0 auto;
 }
-.quick-return-panel > h1 { margin: 22px 0 6px; }
-.quick-return-lead { margin-top: 0; }
+.quick-return-panel > h1 { margin: 0 0 12px; }
 #quick-return-form { display: grid; gap: 16px; }
 #quick-return-form label { font-size: 1rem; font-weight: 750; }
-#quick-return-form input {
+#quick-return-form input,
+#quick-return-form select {
   display: block;
   width: 100%;
   min-height: 58px;
@@ -519,6 +503,34 @@ footer {
   border: 2px solid #91a89d;
   border-radius: 12px;
   font-size: 1.35rem;
+}
+.distance-picker-label { text-align: center; }
+.distance-picker {
+  position: relative;
+  display: block;
+  margin-top: 7px;
+}
+#quick-return-form .distance-picker select {
+  -webkit-appearance: none;
+  appearance: none;
+  min-height: 92px;
+  margin-top: 0;
+  padding: 8px 52px 8px 18px;
+  background: #fff;
+  color: var(--brand);
+  font-size: 3.15rem;
+  font-weight: 800;
+  text-align: center;
+  text-align-last: center;
+}
+.distance-picker > span {
+  position: absolute;
+  right: 18px;
+  top: 50%;
+  color: var(--brand);
+  font-size: 1.05rem;
+  transform: translateY(-50%);
+  pointer-events: none;
 }
 .quick-return-result {
   display: grid;
@@ -534,7 +546,33 @@ footer {
 .quick-return-result span { font-size: 1.15rem; }
 .quick-return-note { margin-bottom: 6px; font-weight: 700; }
 .quick-return-caution { margin-top: 0; color: #56665e; font-size: .9rem; }
+.model-tools {
+  margin: 18px 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #eef2ef;
+  color: var(--muted);
+  font-size: .9rem;
+}
+.model-tools > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+.model-tools button {
+  min-height: 42px;
+  border: 1px solid #a8b3ad;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--muted);
+}
+.model-tools button.active {
+  border-color: var(--brand);
+  color: var(--brand);
+  font-weight: 700;
+}
 @media(max-width: 480px) {
-  .section-nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .quick-return-panel { padding: 14px; }
 }

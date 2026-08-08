@@ -1,5 +1,5 @@
 import {RUNTIME_VERSION, estimateDestination, estimateDistance, validateArtifact} from './runtime/ride_planning_runtime.js';
-import {APP_VERSION, CALCULATION_CONTRACT_VERSION, appendExecutionSnapshot, createExecutionSnapshot, deleteAllExecutionSnapshots, deleteExecutionSnapshot, executionSnapshotsFilename, executionSnapshotsJsonl, loadExecutionSnapshots, sameExecutionSnapshotContent} from './execution_snapshots.js?v=ride-planning-ui-v21';
+import {APP_VERSION, CALCULATION_CONTRACT_VERSION, appendExecutionSnapshot, createExecutionSnapshot, deleteAllExecutionSnapshots, deleteExecutionSnapshot, executionSnapshotsFilename, executionSnapshotsJsonl, loadExecutionSnapshots, sameExecutionSnapshotContent} from './execution_snapshots.js?v=ride-planning-ui-v22';
 
 const presets = [
   ['collection', 'カード収集', 10, true],
@@ -80,11 +80,6 @@ function epoch(time) {
 function initializeInputs(getArtifact) {
   artifactProvider = getArtifact;
   document.querySelectorAll('[data-events]').forEach(node => { node.innerHTML = eventRows(); });
-  document.querySelectorAll('.mode-nav button').forEach(button => button.addEventListener('click', () => {
-    document.querySelectorAll('.mode-nav button').forEach(item => item.classList.toggle('active', item === button));
-    document.querySelector('#destination-view').classList.toggle('hidden', button.dataset.mode !== 'destination');
-    document.querySelector('#distance-view').classList.toggle('hidden', button.dataset.mode !== 'distance');
-  }));
   document.querySelectorAll('[data-time]').forEach(button => button.addEventListener('click', () => {
     button.closest('form').elements.departure_time.value = button.dataset.time;
   }));
@@ -1202,6 +1197,9 @@ function estimateSimpleDistance(input, settings) {
 }
 
 const QUICK_RETURN_SPEED_KMH = 16;
+const QUICK_RETURN_DISTANCE_KEY = 'ride-planning-lab-quick-return-distance-v1';
+const QUICK_RETURN_MAX_DISTANCE_KM = 150;
+const QUICK_RETURN_DEFAULT_DISTANCE_KM = 25;
 
 function nonnegative(value, label) {
   const number = Number(value);
@@ -1231,20 +1229,38 @@ function quickReturnDuration(minutes) {
   return hours ? `${hours}時間${rest}分` : `${rest}分`;
 }
 
-function initializeQuickReturn(now = () => new Date()) {
+function loadDistance(storage) {
+  try {
+    const raw = storage?.getItem(QUICK_RETURN_DISTANCE_KEY);
+    const value = raw === null || raw === undefined ? NaN : Number(raw);
+    return Number.isInteger(value) && value >= 0 && value <= QUICK_RETURN_MAX_DISTANCE_KM
+      ? value : QUICK_RETURN_DEFAULT_DISTANCE_KM;
+  } catch (error) {
+    return QUICK_RETURN_DEFAULT_DISTANCE_KM;
+  }
+}
+
+function initializeQuickReturn(now = () => new Date(), storage = globalThis.localStorage) {
   const form = document.querySelector('#quick-return-form');
   const arrival = document.querySelector('#quick-return-arrival');
   const remaining = document.querySelector('#quick-return-duration');
   const error = document.querySelector('#quick-return-error');
   if (!form || !arrival || !remaining || !error) return;
+  const distance = form.elements.remaining_distance_km;
+  distance.innerHTML = Array.from(
+    { length: QUICK_RETURN_MAX_DISTANCE_KM + 1 },
+    (_, value) => `<option value="${value}">${value}</option>`,
+  ).join('');
+  distance.value = String(loadDistance(storage));
   const update = () => {
     try {
       if (!form.checkValidity()) throw new Error('残距離と時間を確認してください。');
       const result = estimateQuickReturn(
-        form.elements.remaining_distance_km.value,
+        distance.value,
         form.elements.extra_minutes.value,
         now(),
       );
+      try { storage?.setItem(QUICK_RETURN_DISTANCE_KEY, distance.value); } catch (error) { /* optional */ }
       arrival.textContent = `帰宅予想 ${quickReturnClock(result.arrivalAt)}`;
       remaining.textContent = `残り約${quickReturnDuration(result.remainingMinutes)}`;
       error.textContent = '';
@@ -1257,6 +1273,7 @@ function initializeQuickReturn(now = () => new Date()) {
     }
   };
   form.addEventListener('input', update);
+  form.addEventListener('change', update);
   update();
 }
 
@@ -1444,21 +1461,25 @@ initializeUpdateManager();
 initializeQuickReturn();
 
 function showSection(name) {
-  ['calculator', 'quick-return', 'settings', 'graph'].forEach(section => {
+  const calculation = name === 'destination' || name === 'distance';
+  document.querySelector('#calculator-section').classList.toggle('hidden', !calculation);
+  document.querySelector('#destination-view').classList.toggle('hidden', name !== 'destination');
+  document.querySelector('#distance-view').classList.toggle('hidden', name !== 'distance');
+  ['quick-return', 'settings', 'graph'].forEach(section => {
     document.querySelector(`#${section}-section`).classList.toggle('hidden', section !== name);
   });
-  document.querySelectorAll('.section-nav button').forEach(button => {
+  document.querySelectorAll('.primary-nav button').forEach(button => {
+    button.classList.toggle('active', button.dataset.section === name);
+  });
+  document.querySelectorAll('.model-tools button').forEach(button => {
     button.classList.toggle('active', button.dataset.section === name);
   });
   if (name === 'graph') drawModelGraph();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-document.querySelectorAll('.section-nav button').forEach(button => {
+document.querySelectorAll('[data-section]').forEach(button => {
   button.addEventListener('click', () => showSection(button.dataset.section));
-});
-document.querySelectorAll('.back-to-calculator').forEach(button => {
-  button.addEventListener('click', () => showSection('calculator'));
 });
 
 const modelSelector = document.querySelector('#prediction-model');
