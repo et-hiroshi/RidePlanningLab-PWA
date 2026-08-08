@@ -1,5 +1,5 @@
 import {RUNTIME_VERSION, estimateDestination, estimateDistance, validateArtifact} from './runtime/ride_planning_runtime.js';
-import {APP_VERSION, CALCULATION_CONTRACT_VERSION, appendExecutionSnapshot, createExecutionSnapshot, deleteAllExecutionSnapshots, deleteExecutionSnapshot, executionSnapshotsFilename, executionSnapshotsJsonl, loadExecutionSnapshots, sameExecutionSnapshotContent} from './execution_snapshots.js?v=ride-planning-ui-v22';
+import {APP_VERSION, CALCULATION_CONTRACT_VERSION, appendExecutionSnapshot, createExecutionSnapshot, deleteAllExecutionSnapshots, deleteExecutionSnapshot, executionSnapshotsFilename, executionSnapshotsJsonl, loadExecutionSnapshots, sameExecutionSnapshotContent} from './execution_snapshots.js?v=ride-planning-ui-v23';
 
 const presets = [
   ['collection', 'カード収集', 10, true],
@@ -1280,7 +1280,7 @@ function initializeQuickReturn(now = () => new Date(), storage = globalThis.loca
 const currentCalculations = { destination: null, distance: null };
 const snapshotNameDrafts = { destination: '', distance: '' };
 let ridePlanUi;
-let predictionModel = 'current';
+let predictionModel = 'simple';
 let simpleSettings = loadSimpleSettings();
 
 function selectedModelIsSimple() {

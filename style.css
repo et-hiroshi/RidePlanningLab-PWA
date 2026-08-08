@@ -547,13 +547,18 @@ footer {
 .quick-return-note { margin-bottom: 6px; font-weight: 700; }
 .quick-return-caution { margin-top: 0; color: #56665e; font-size: .9rem; }
 .model-tools {
-  margin: 18px 0 12px;
-  padding: 10px 12px;
+  margin: 12px 0 0;
+  padding: 14px;
   border: 1px solid var(--line);
-  border-radius: 10px;
-  background: #eef2ef;
+  border-radius: 9px;
+  background: #fff;
   color: var(--muted);
-  font-size: .9rem;
+  font-size: .82rem;
+}
+.model-tools summary {
+  cursor: pointer;
+  color: var(--ink);
+  font-weight: 750;
 }
 .model-tools > div {
   display: grid;
