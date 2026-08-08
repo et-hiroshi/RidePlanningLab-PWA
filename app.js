@@ -1,5 +1,5 @@
 import {RUNTIME_VERSION, estimateDestination, estimateDistance, validateArtifact} from './runtime/ride_planning_runtime.js';
-import {APP_VERSION, CALCULATION_CONTRACT_VERSION, appendExecutionSnapshot, createExecutionSnapshot, deleteAllExecutionSnapshots, deleteExecutionSnapshot, executionSnapshotsFilename, executionSnapshotsJsonl, loadExecutionSnapshots, sameExecutionSnapshotContent} from './execution_snapshots.js?v=ride-planning-ui-v24';
+import {APP_VERSION, CALCULATION_CONTRACT_VERSION, appendExecutionSnapshot, createExecutionSnapshot, deleteAllExecutionSnapshots, deleteExecutionSnapshot, executionSnapshotsFilename, executionSnapshotsJsonl, loadExecutionSnapshots, sameExecutionSnapshotContent} from './execution_snapshots.js?v=ride-planning-ui-v25';
 
 const presets = [
   ['collection', 'カード収集', 10, true],
@@ -1198,7 +1198,10 @@ function estimateSimpleDistance(input, settings) {
 
 const QUICK_RETURN_SPEED_KMH = 16;
 const QUICK_RETURN_DISTANCE_KEY = 'ride-planning-lab-quick-return-distance-v1';
+const QUICK_RETURN_BUFFER_KEY = 'ride-planning-lab-quick-return-buffer-minutes-v1';
 const QUICK_RETURN_MAX_DISTANCE_KM = 150;
+const QUICK_RETURN_MAX_BUFFER_MINUTES = 120;
+const QUICK_RETURN_BUFFER_STEP_MINUTES = 10;
 const QUICK_RETURN_DEFAULT_DISTANCE_KM = 25;
 
 function nonnegative(value, label) {
@@ -1240,6 +1243,20 @@ function loadDistance(storage) {
   }
 }
 
+function loadBufferMinutes(storage) {
+  try {
+    const raw = storage?.getItem(QUICK_RETURN_BUFFER_KEY);
+    const value = raw === null || raw === undefined ? NaN : Number(raw);
+    return Number.isInteger(value)
+      && value >= 0
+      && value <= QUICK_RETURN_MAX_BUFFER_MINUTES
+      && value % QUICK_RETURN_BUFFER_STEP_MINUTES === 0
+      ? value : 0;
+  } catch (error) {
+    return 0;
+  }
+}
+
 function initializeQuickReturn(now = () => new Date(), storage = globalThis.localStorage) {
   const form = document.querySelector('#quick-return-form');
   const arrival = document.querySelector('#quick-return-arrival');
@@ -1248,21 +1265,33 @@ function initializeQuickReturn(now = () => new Date(), storage = globalThis.loca
   const error = document.querySelector('#quick-return-error');
   if (!form || !arrival || !remaining || !calculatedAt || !error) return () => {};
   const distance = form.elements.remaining_distance_km;
+  const buffer = form.elements.extra_minutes;
   distance.innerHTML = Array.from(
     { length: QUICK_RETURN_MAX_DISTANCE_KM + 1 },
-    (_, value) => `<option value="${value}">${value}</option>`,
+    (_, value) => `<option value="${value}">${value} km</option>`,
+  ).join('');
+  buffer.innerHTML = Array.from(
+    { length: QUICK_RETURN_MAX_BUFFER_MINUTES / QUICK_RETURN_BUFFER_STEP_MINUTES + 1 },
+    (_, index) => {
+      const value = index * QUICK_RETURN_BUFFER_STEP_MINUTES;
+      return `<option value="${value}">${value}分</option>`;
+    },
   ).join('');
   distance.value = String(loadDistance(storage));
+  buffer.value = String(loadBufferMinutes(storage));
   const update = () => {
     try {
       if (!form.checkValidity()) throw new Error('残距離と時間を確認してください。');
       const calculationTime = now();
       const result = estimateQuickReturn(
         distance.value,
-        form.elements.extra_minutes.value,
+        buffer.value,
         calculationTime,
       );
-      try { storage?.setItem(QUICK_RETURN_DISTANCE_KEY, distance.value); } catch (error) { /* optional */ }
+      try {
+        storage?.setItem(QUICK_RETURN_DISTANCE_KEY, distance.value);
+        storage?.setItem(QUICK_RETURN_BUFFER_KEY, buffer.value);
+      } catch (error) { /* optional */ }
       arrival.textContent = `帰宅予想 ${quickReturnClock(result.arrivalAt)}`;
       remaining.textContent = `残り約${quickReturnDuration(result.remainingMinutes)}`;
       calculatedAt.textContent = `現在 ${quickReturnClock(calculationTime)} 時点`;

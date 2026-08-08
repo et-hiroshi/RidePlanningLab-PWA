@@ -493,45 +493,22 @@ footer {
 .quick-return-panel > h1 { margin: 0 0 12px; }
 #quick-return-form { display: grid; gap: 16px; }
 #quick-return-form label { font-size: 1rem; font-weight: 750; }
-#quick-return-form input,
 #quick-return-form select {
   display: block;
   width: 100%;
-  min-height: 58px;
+  min-height: 74px;
   margin-top: 7px;
-  padding: 12px 14px;
+  padding: 10px 14px;
   border: 2px solid #91a89d;
   border-radius: 12px;
-  font-size: 1.35rem;
-}
-.distance-picker-label { text-align: center; }
-.distance-picker {
-  position: relative;
-  display: block;
-  margin-top: 7px;
-}
-#quick-return-form .distance-picker select {
-  -webkit-appearance: none;
-  appearance: none;
-  min-height: 92px;
-  margin-top: 0;
-  padding: 8px 52px 8px 18px;
   background: #fff;
   color: var(--brand);
-  font-size: 3.15rem;
+  font-size: 2rem;
   font-weight: 800;
   text-align: center;
   text-align-last: center;
 }
-.distance-picker > span {
-  position: absolute;
-  right: 18px;
-  top: 50%;
-  color: var(--brand);
-  font-size: 1.05rem;
-  transform: translateY(-50%);
-  pointer-events: none;
-}
+.quick-return-picker-label { text-align: center; }
 .quick-return-result {
   display: grid;
   gap: 8px;
@@ -544,7 +521,7 @@ footer {
 }
 .quick-return-result strong { font-size: clamp(2rem, 11vw, 3.1rem); line-height: 1.1; }
 .quick-return-result span { font-size: 1.15rem; }
-.quick-return-result small { color: var(--muted); font-size: .78rem; font-weight: 500; }
+.quick-return-result small { color: #fff; font-size: .78rem; font-weight: 500; }
 .quick-return-note { margin-bottom: 6px; font-weight: 700; }
 .quick-return-caution { margin-top: 0; color: #56665e; font-size: .9rem; }
 .model-tools {
