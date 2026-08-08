@@ -544,6 +544,7 @@ footer {
 }
 .quick-return-result strong { font-size: clamp(2rem, 11vw, 3.1rem); line-height: 1.1; }
 .quick-return-result span { font-size: 1.15rem; }
+.quick-return-result small { color: var(--muted); font-size: .78rem; font-weight: 500; }
 .quick-return-note { margin-bottom: 6px; font-weight: 700; }
 .quick-return-caution { margin-top: 0; color: #56665e; font-size: .9rem; }
 .model-tools {

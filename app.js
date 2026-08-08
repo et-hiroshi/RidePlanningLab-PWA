@@ -1,5 +1,5 @@
 import {RUNTIME_VERSION, estimateDestination, estimateDistance, validateArtifact} from './runtime/ride_planning_runtime.js';
-import {APP_VERSION, CALCULATION_CONTRACT_VERSION, appendExecutionSnapshot, createExecutionSnapshot, deleteAllExecutionSnapshots, deleteExecutionSnapshot, executionSnapshotsFilename, executionSnapshotsJsonl, loadExecutionSnapshots, sameExecutionSnapshotContent} from './execution_snapshots.js?v=ride-planning-ui-v23';
+import {APP_VERSION, CALCULATION_CONTRACT_VERSION, appendExecutionSnapshot, createExecutionSnapshot, deleteAllExecutionSnapshots, deleteExecutionSnapshot, executionSnapshotsFilename, executionSnapshotsJsonl, loadExecutionSnapshots, sameExecutionSnapshotContent} from './execution_snapshots.js?v=ride-planning-ui-v24';
 
 const presets = [
   ['collection', 'カード収集', 10, true],
@@ -1244,8 +1244,9 @@ function initializeQuickReturn(now = () => new Date(), storage = globalThis.loca
   const form = document.querySelector('#quick-return-form');
   const arrival = document.querySelector('#quick-return-arrival');
   const remaining = document.querySelector('#quick-return-duration');
+  const calculatedAt = document.querySelector('#quick-return-calculated-at');
   const error = document.querySelector('#quick-return-error');
-  if (!form || !arrival || !remaining || !error) return;
+  if (!form || !arrival || !remaining || !calculatedAt || !error) return () => {};
   const distance = form.elements.remaining_distance_km;
   distance.innerHTML = Array.from(
     { length: QUICK_RETURN_MAX_DISTANCE_KM + 1 },
@@ -1255,26 +1256,33 @@ function initializeQuickReturn(now = () => new Date(), storage = globalThis.loca
   const update = () => {
     try {
       if (!form.checkValidity()) throw new Error('残距離と時間を確認してください。');
+      const calculationTime = now();
       const result = estimateQuickReturn(
         distance.value,
         form.elements.extra_minutes.value,
-        now(),
+        calculationTime,
       );
       try { storage?.setItem(QUICK_RETURN_DISTANCE_KEY, distance.value); } catch (error) { /* optional */ }
       arrival.textContent = `帰宅予想 ${quickReturnClock(result.arrivalAt)}`;
       remaining.textContent = `残り約${quickReturnDuration(result.remainingMinutes)}`;
+      calculatedAt.textContent = `現在 ${quickReturnClock(calculationTime)} 時点`;
       error.textContent = '';
       error.classList.add('hidden');
     } catch (reason) {
       arrival.textContent = '帰宅予想 —';
       remaining.textContent = '残り時間を計算できません';
+      calculatedAt.textContent = '計算時刻 —';
       error.textContent = reason.message;
       error.classList.remove('hidden');
     }
   };
   form.addEventListener('input', update);
   form.addEventListener('change', update);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') update();
+  });
   update();
+  return update;
 }
 
 const currentCalculations = { destination: null, distance: null };
@@ -1458,7 +1466,7 @@ document.querySelector('#distance-form').addEventListener('submit', event => {
 initializeInputs(getArtifact);
 ridePlanUi = initializeSnapshotUi(currentCalculations, reproduction, setSnapshotNameDraft);
 initializeUpdateManager();
-initializeQuickReturn();
+const recalculateQuickReturn = initializeQuickReturn();
 
 function showSection(name) {
   const calculation = name === 'destination' || name === 'distance';
@@ -1474,6 +1482,7 @@ function showSection(name) {
   document.querySelectorAll('.model-tools button').forEach(button => {
     button.classList.toggle('active', button.dataset.section === name);
   });
+  if (name === 'quick-return') recalculateQuickReturn();
   if (name === 'graph') drawModelGraph();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
