@@ -1,4 +1,4 @@
-export const APP_VERSION='ride-planning-ui-v18';
+export const APP_VERSION='ride-planning-ui-v19';
 export const SNAPSHOT_SCHEMA_VERSION='ride-plan-execution-snapshot-v1';
 export const SNAPSHOT_RECORD_TYPE='ride_plan_execution_snapshot';
 export const SNAPSHOT_STORE_SCHEMA_VERSION='ride-plan-execution-snapshot-store-v1';
@@ -11,6 +11,19 @@ const uuidPattern=/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a
 const finite=value=>typeof value==='number'&&Number.isFinite(value);
 function requireFinite(value,label){if(!finite(value))throw new Error(`${label}が不正です。`)}
 function requireNonnegative(value,label){requireFinite(value,label);if(value<0)throw new Error(`${label}が不正です。`)}
+function validatePredictionModel(input,reproduction){
+  const model=input.prediction_model||'current';
+  if(!['current','simple'].includes(model))throw new Error('予測モデルが不正です。');
+  if(reproduction.prediction_model!==undefined&&reproduction.prediction_model!==model)throw new Error('予測モデルの再現情報が一致しません。');
+  if(model==='current')return;
+  if(input.simple_model_id!=='simple-distance-rate-trial-v1'||reproduction.simple_model_id!==input.simple_model_id)throw new Error('簡易モデルIDが不正です。');
+  const parameters=input.simple_model_parameters;
+  const reproduced=reproduction.simple_model_parameters;
+  const keys=['speed_kmh','p10_fixed_min','p10_per_km_min','p90_fixed_min','p90_per_km_min'];
+  if(!parameters||!reproduced)throw new Error('簡易モデル設定の再現情報がありません。');
+  keys.forEach(key=>{requireNonnegative(parameters[key],`簡易モデル ${key}`);if(parameters[key]!==reproduced[key])throw new Error('簡易モデル設定の再現情報が一致しません。')});
+  if(parameters.speed_kmh===0||60/parameters.speed_kmh<=parameters.p10_per_km_min)throw new Error('簡易モデル設定が不正です。');
+}
 export function validateExecutionSnapshot(record){
   if(!record||typeof record!=='object'||Array.isArray(record))throw new Error('Snapshotレコードが不正です。');
   if(record.schema_version!==SNAPSHOT_SCHEMA_VERSION||record.record_type!==SNAPSHOT_RECORD_TYPE)throw new Error('未対応のSnapshot形式です。');
@@ -33,6 +46,7 @@ export function validateExecutionSnapshot(record){
   const reproduction=record.reproduction;
   for(const key of ['app_version','runtime_artifact_id','runtime_artifact_sha256','teacher_version','calculation_contract_version'])if(typeof reproduction?.[key]!=='string'||!reproduction[key])throw new Error(`再現情報 ${key} が不正です。`);
   if(!/^[0-9a-f]{64}$/.test(reproduction.runtime_artifact_sha256))throw new Error('Runtime artifact hashが不正です。');
+  validatePredictionModel(input,reproduction);
   return record;
 }
 function readEnvelope(storage){
