@@ -2,8 +2,8 @@
   "limitation_codes": [
     "component_interval_is_empirical_not_safety_guarantee",
     "episode_reconstruction_is_approximate",
-    "same_actual_tail_has_bounded_special_ride_outliers",
-    "shared_100km_plus_overprediction_bias_remains",
+    "independent_holdout_not_yet_available",
+    "prospective_validation_rides_excluded_from_current_model",
     "unexpected_default_is_user_editable_20_minutes"
   ],
   "moving": {
@@ -12,24 +12,14 @@
   "natural": {
     "episode_cap_sec": 600,
     "estimator_version": "distance-band-median-rate-natural-release-v1",
-    "fallback_used_by_band": {
-      "100_km_and_over": false,
-      "50_to_100_km": false,
-      "under_50_km": false
-    },
-    "high_rate_transition_end_km": 150.0,
-    "high_rate_transition_start_km": 60.0,
-    "high_sec_per_km": 50.0,
-    "long_distance_runtime_policy": "candidate_linear_rate_60_to_150_v1",
-    "long_sec_per_km": 46.02866513408881,
+    "high_rate_transition_end_km": null,
+    "high_rate_transition_start_km": null,
+    "high_sec_per_km": 44.974082814591924,
+    "long_distance_runtime_policy": "pooled_rate_from_60km_no_100_or_150km_switch_v1",
+    "long_sec_per_km": 44.974082814591924,
     "low_sec_per_km": 26.847366793775123,
     "minimum_band_samples": 10,
-    "model": "linear_rate_transition_40_60_then_60_150",
-    "sample_count_by_band": {
-      "100_km_and_over": 52,
-      "50_to_100_km": 104,
-      "under_50_km": 521
-    },
+    "model": "pooled_50plus_rate_with_40_60_smoothing",
     "transition_end_km": 60,
     "transition_start_km": 40
   },
@@ -43,87 +33,43 @@
     "upper_bound_km": 500.0
   },
   "source_identity": {
-    "model_version": "prediction-candidate-s1-teacher-same-family-v1",
+    "model_version": "prediction-natural-pooled-50plus-v1",
     "natural_actual_contract": "session-nonmoving-minus-confirmed-planned-then-per-stop-episode-10min-cap-v2",
-    "operational_release_id": "prediction-candidate-s1-teacher-same-family-v1",
+    "operational_release_id": "prediction-natural-pooled-50plus-v1",
     "operational_release_schema": "ride-planning-pwa-operational-artifact-v1",
-    "operational_release_sha256": "0a06cb1a42c13e0a95f55aafc3caaca70ed07690a35271d514394c27031869ba",
+    "operational_release_sha256": "e4b89bb16a0db820c7207fa52affa234730d4b04c902a7843f2c34eee570f91f",
     "practical_artifact_version": "practical-ride-time-estimator-v2.0.0",
     "practical_dataset": "sha256:b5635d9f90d35b37878a7ed02ceaf2f2289c92ad2119a631d245eb890d950561",
     "r059_result": "not_applicable",
-    "rollback_release_id": "natural-60-150-continuous-rate-v1",
+    "rollback_release_id": "prediction-candidate-s1-teacher-same-family-v1",
     "teacher_contract": "CURRENT_PRACTICAL_NATURAL",
     "teacher_version": "teacher-stage1-parser-1.7.3-s1-stop-positive-v1-human-v2"
   },
   "uncertainty": {
     "anchors": [
       {
-        "distance_km": 14.153500000000001,
+        "distance_km": 15.351,
         "fallback_source": "distance_band",
-        "p01_sec": -1060.256502022714,
-        "p025_sec": -888.5903467820176,
-        "p05_sec": -742.629486296457,
-        "p10_sec": -463.3566455003012,
-        "p90_sec": 1082.6229770918633,
-        "p95_sec": 1515.6112220099567,
-        "p975_sec": 2153.4577279900454,
-        "p99_sec": 3066.011808092379,
-        "sample_count": 434
+        "p10_sec": -536.6456501062426,
+        "p90_sec": 1152.5528208661362,
+        "sample_count": 521
       },
       {
-        "distance_km": 44.4705,
+        "distance_km": 69.7115,
         "fallback_source": "distance_band",
-        "p01_sec": -1527.2414223389114,
-        "p025_sec": -1409.7383214593142,
-        "p05_sec": -1270.5799967827854,
-        "p10_sec": -1061.044472170014,
-        "p90_sec": 1446.7659647134922,
-        "p95_sec": 1727.7868887418742,
-        "p975_sec": 3175.3861548641476,
-        "p99_sec": 3407.071839841815,
-        "sample_count": 108
+        "p10_sec": -1457.0336960779455,
+        "p90_sec": 3046.375572227993,
+        "sample_count": 104
       },
       {
-        "distance_km": 74.804,
+        "distance_km": 126.17,
         "fallback_source": "distance_band",
-        "p01_sec": -2486.6711299769704,
-        "p025_sec": -2274.7075206480613,
-        "p05_sec": -1798.2779542200476,
-        "p10_sec": -1605.738523325584,
-        "p90_sec": 3133.438065160104,
-        "p95_sec": 3648.262833485421,
-        "p975_sec": 4063.7928313669536,
-        "p99_sec": 4802.353896237046,
-        "sample_count": 83
-      },
-      {
-        "distance_km": 121.383,
-        "fallback_source": "distance_band",
-        "p01_sec": -4542.288033153382,
-        "p025_sec": -3981.8024792018223,
-        "p05_sec": -3533.110523901516,
-        "p10_sec": -3080.963241167523,
-        "p90_sec": 822.5062116177105,
-        "p95_sec": 1189.3455826750178,
-        "p975_sec": 1539.4611992005703,
-        "p99_sec": 1624.1393082198251,
-        "sample_count": 41
-      },
-      {
-        "distance_km": 163.073,
-        "fallback_source": "distance_band",
-        "p01_sec": -5239.710803008562,
-        "p025_sec": -5102.745194021686,
-        "p05_sec": -4874.469179043559,
-        "p10_sec": -4417.917149087305,
-        "p90_sec": 822.6060891042507,
-        "p95_sec": 1102.3410074331914,
-        "p975_sec": 1242.2084665976618,
-        "p99_sec": 1326.1289420963442,
-        "sample_count": 11
+        "p10_sec": -3246.0749781354916,
+        "p90_sec": 1358.2281537026029,
+        "sample_count": 52
       }
     ],
-    "interval_version": "moving-natural-component-linear-80-natural-continuous-60-150-v1",
+    "interval_version": "td039-three-band-component-residual-p10-p90-v1",
     "long_distance_warning_km": 150,
     "quantile_levels": [
       0.1,

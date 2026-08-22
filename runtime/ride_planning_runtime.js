@@ -16,9 +16,10 @@ export function validateArtifact(a) {
   }
   finite(a.moving?.median_sec_per_km, 'moving rate', false);
   const continuousNatural=a.natural?.model==='linear_rate_transition_40_60_then_60_150';
+  const pooledNatural=a.natural?.model==='pooled_50plus_rate_with_40_60_smoothing';
   const stepNatural=a.natural?.model==='linear_rate_transition_with_100km_band';
   if (!a.natural || a.natural.episode_cap_sec !== 600 ||
-      (!continuousNatural&&!stepNatural) ||
+      (!continuousNatural&&!pooledNatural&&!stepNatural) ||
       !Number.isFinite(a.natural.low_sec_per_km)||!Number.isFinite(a.natural.long_sec_per_km)||!Number.isFinite(a.natural.high_sec_per_km)||
       a.natural.low_sec_per_km<0||a.natural.long_sec_per_km<a.natural.low_sec_per_km||a.natural.high_sec_per_km<0||
       !(a.natural.transition_start_km<a.natural.transition_end_km) ||
@@ -31,7 +32,7 @@ export function validateArtifact(a) {
   if (a.uncertainty?.target!=='moving_plus_natural_only' ||
       a.uncertainty.user_input_uncertainty?.planned_included!==false ||
       a.uncertainty.user_input_uncertainty?.unexpected_included!==false ||
-      !Array.isArray(a.uncertainty?.anchors) || a.uncertainty.anchors.length!==5 ||
+      !Array.isArray(a.uncertainty?.anchors) || a.uncertainty.anchors.length<2 ||
       JSON.stringify(a.uncertainty.quantile_levels) !== '[0.1,0.9]') throw new Error('予測幅データが不正です。');
   let previous=-Infinity;
   a.uncertainty.anchors.forEach(b => {
