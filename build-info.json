@@ -1,11 +1,11 @@
 {
-  "artifact_sha256": "8800647cfab25f4859f1b6b4cd992c596b776344a3cb60e9e77a6f0005389920",
-  "build_at": "2026-08-11T14:18:19+09:00",
+  "artifact_sha256": "57872ff1f9898a223c4512e692c4271c9a39fc33f5bff36d6d3fc1c50d07b4fc",
+  "build_at": "2026-08-22T12:58:35+09:00",
   "expected_runtime_schema": "mobile-ride-planning-runtime-artifact-v5",
   "expected_runtime_version": "mobile-ride-planning-practical-runtime-v7",
   "schema_version": "ride-planning-build-info-v1",
   "service_worker_version": "ride-planning-service-worker-v2",
-  "ui_commit": "2ad0664472a9cf0fce713a60cf917eae2d7011db",
+  "ui_commit": "b4b7e53b803cdb9e4349a51641d9963399cf0b49",
   "ui_runtime_generation": 7,
   "ui_version": "ride-planning-ui-v25"
 }
