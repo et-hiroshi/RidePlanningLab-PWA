@@ -1,4 +1,4 @@
-export const APP_VERSION='ride-planning-ui-v25';
+export const APP_VERSION='ride-planning-ui-v26';
 export const SNAPSHOT_SCHEMA_VERSION='ride-plan-execution-snapshot-v1';
 export const SNAPSHOT_RECORD_TYPE='ride_plan_execution_snapshot';
 export const SNAPSHOT_STORE_SCHEMA_VERSION='ride-plan-execution-snapshot-store-v1';
@@ -16,13 +16,16 @@ function validatePredictionModel(input,reproduction){
   if(!['current','simple'].includes(model))throw new Error('予測モデルが不正です。');
   if(reproduction.prediction_model!==undefined&&reproduction.prediction_model!==model)throw new Error('予測モデルの再現情報が一致しません。');
   if(model==='current')return;
-  if(input.simple_model_id!=='simple-distance-rate-trial-v1'||reproduction.simple_model_id!==input.simple_model_id)throw new Error('簡易モデルIDが不正です。');
+  if(!['simple-distance-rate-trial-v1','simple-origin-linear-v2'].includes(input.simple_model_id)||reproduction.simple_model_id!==input.simple_model_id)throw new Error('簡易モデルIDが不正です。');
   const parameters=input.simple_model_parameters;
   const reproduced=reproduction.simple_model_parameters;
-  const keys=['speed_kmh','p10_fixed_min','p10_per_km_min','p90_fixed_min','p90_per_km_min'];
+  const keys=input.simple_model_id==='simple-origin-linear-v2'
+    ?['speed_kmh','early_width_at_100km_min','late_width_at_100km_min']
+    :['speed_kmh','p10_fixed_min','p10_per_km_min','p90_fixed_min','p90_per_km_min'];
   if(!parameters||!reproduced)throw new Error('簡易モデル設定の再現情報がありません。');
   keys.forEach(key=>{requireNonnegative(parameters[key],`簡易モデル ${key}`);if(parameters[key]!==reproduced[key])throw new Error('簡易モデル設定の再現情報が一致しません。')});
-  if(parameters.speed_kmh===0||60/parameters.speed_kmh<=parameters.p10_per_km_min)throw new Error('簡易モデル設定が不正です。');
+  const earlyRate=input.simple_model_id==='simple-origin-linear-v2'?parameters.early_width_at_100km_min/100:parameters.p10_per_km_min;
+  if(parameters.speed_kmh===0||60/parameters.speed_kmh<=earlyRate)throw new Error('簡易モデル設定が不正です。');
 }
 export function validateExecutionSnapshot(record){
   if(!record||typeof record!=='object'||Array.isArray(record))throw new Error('Snapshotレコードが不正です。');

@@ -1,5 +1,5 @@
 import {RUNTIME_VERSION, estimateDestination, estimateDistance, validateArtifact} from './runtime/ride_planning_runtime.js';
-import {APP_VERSION, CALCULATION_CONTRACT_VERSION, appendExecutionSnapshot, createExecutionSnapshot, deleteAllExecutionSnapshots, deleteExecutionSnapshot, executionSnapshotsFilename, executionSnapshotsJsonl, loadExecutionSnapshots, sameExecutionSnapshotContent} from './execution_snapshots.js?v=ride-planning-ui-v25';
+import {APP_VERSION, CALCULATION_CONTRACT_VERSION, appendExecutionSnapshot, createExecutionSnapshot, deleteAllExecutionSnapshots, deleteExecutionSnapshot, executionSnapshotsFilename, executionSnapshotsJsonl, loadExecutionSnapshots, sameExecutionSnapshotContent} from './execution_snapshots.js?v=ride-planning-ui-v26';
 
 const presets = [
   ['collection', 'カード収集', 10, true],
@@ -154,7 +154,7 @@ function warning(codes) {
 }
 
 function commonResult(result, primary, supporting, fixed, mode) {
-  const simple = result.prediction_model === 'simple-distance-rate-trial-v1';
+  const simple = result.prediction_model === 'simple-origin-linear-v2';
   const save = `<div class="execution-save">
       <label>計画名（任意）<input data-snapshot-name maxlength="80" autocomplete="off"></label>
       <p class="plan-context" data-plan-context>新しい計画</p>
@@ -1015,14 +1015,17 @@ function initializeUpdateManager() {
   }), 4000);
 }
 
-const SIMPLE_MODEL_ID = 'simple-distance-rate-trial-v1';
-const SIMPLE_SETTINGS_KEY = 'ride-planning-lab-simple-model-settings-v1';
+const SIMPLE_MODEL_ID = 'simple-origin-linear-v2';
+const SIMPLE_SETTINGS_KEY = 'ride-planning-lab-simple-model-settings-v2';
+const LEGACY_SIMPLE_SETTINGS_KEY = 'ride-planning-lab-simple-model-settings-v1';
 const SIMPLE_DEFAULTS = Object.freeze({
-  speed_kmh: 16,
-  p10_fixed_min: 10,
-  p10_per_km_min: 0.30,
-  p90_fixed_min: 30,
-  p90_per_km_min: 0.20,
+  speed_kmh: 17,
+  early_width_at_100km_min: 40,
+  late_width_at_100km_min: 50,
+});
+const LEGACY_DEFAULTS = Object.freeze({
+  speed_kmh: 16, p10_fixed_min: 10, p10_per_km_min: 0.30,
+  p90_fixed_min: 30, p90_per_km_min: 0.20,
 });
 
 function finite(value, name, positive = false) {
@@ -1036,22 +1039,39 @@ function finite(value, name, positive = false) {
 function validateSimpleSettings(raw) {
   const value = {
     speed_kmh: finite(raw?.speed_kmh, '基準速度', true),
-    p10_fixed_min: finite(raw?.p10_fixed_min, 'P10固定幅'),
-    p10_per_km_min: finite(raw?.p10_per_km_min, 'P10距離係数'),
-    p90_fixed_min: finite(raw?.p90_fixed_min, 'P90固定幅'),
-    p90_per_km_min: finite(raw?.p90_per_km_min, 'P90距離係数'),
+    early_width_at_100km_min: finite(raw?.early_width_at_100km_min, '100km時の早め幅'),
+    late_width_at_100km_min: finite(raw?.late_width_at_100km_min, '100km時の遅め幅'),
   };
-  const centerPerKm = 60 / value.speed_kmh;
-  if (centerPerKm <= value.p10_per_km_min) {
-    throw new Error('P10が距離とともに増えるよう、P10距離係数を基準時間/kmより小さくしてください。');
+  if (60 / value.speed_kmh <= value.early_width_at_100km_min / 100) {
+    throw new Error('早め予測が距離とともに増えるよう、100km時の早め幅を小さくしてください。');
   }
   return value;
+}
+
+function migrateSimpleSettings(raw) {
+  if (raw?.early_width_at_100km_min !== undefined || raw?.late_width_at_100km_min !== undefined) {
+    return validateSimpleSettings(raw);
+  }
+  const legacy = Object.fromEntries(Object.keys(LEGACY_DEFAULTS).map(key => [key, finite(raw?.[key], key)]));
+  if (Object.keys(LEGACY_DEFAULTS).every(key => legacy[key] === LEGACY_DEFAULTS[key])) {
+    return { ...SIMPLE_DEFAULTS };
+  }
+  return validateSimpleSettings({
+    speed_kmh: legacy.speed_kmh,
+    early_width_at_100km_min: legacy.p10_fixed_min + 100 * legacy.p10_per_km_min,
+    late_width_at_100km_min: legacy.p90_fixed_min + 100 * legacy.p90_per_km_min,
+  });
 }
 
 function loadSimpleSettings(storage = globalThis.localStorage) {
   try {
     const raw = storage?.getItem(SIMPLE_SETTINGS_KEY);
-    return raw ? validateSimpleSettings(JSON.parse(raw)) : { ...SIMPLE_DEFAULTS };
+    if (raw) return validateSimpleSettings(JSON.parse(raw));
+    const legacy = storage?.getItem(LEGACY_SIMPLE_SETTINGS_KEY);
+    if (!legacy) return { ...SIMPLE_DEFAULTS };
+    const migrated = migrateSimpleSettings(JSON.parse(legacy));
+    storage?.setItem(SIMPLE_SETTINGS_KEY, JSON.stringify(migrated));
+    return migrated;
   } catch (error) {
     return { ...SIMPLE_DEFAULTS };
   }
@@ -1065,6 +1085,7 @@ function saveSimpleSettings(settings, storage = globalThis.localStorage) {
 
 function resetSimpleSettings(storage = globalThis.localStorage) {
   storage?.removeItem(SIMPLE_SETTINGS_KEY);
+  storage?.removeItem(LEGACY_SIMPLE_SETTINGS_KEY);
   return { ...SIMPLE_DEFAULTS };
 }
 
@@ -1077,10 +1098,12 @@ function simpleBaseMinutes(distanceKm, settings) {
   const distance = finite(distanceKm, '往復距離');
   const value = validateSimpleSettings(settings);
   const center = distance / value.speed_kmh * 60;
+  const earlyWidth = value.early_width_at_100km_min * distance / 100;
+  const lateWidth = value.late_width_at_100km_min * distance / 100;
   return {
     center,
-    p10: Math.max(0, center - (value.p10_fixed_min + value.p10_per_km_min * distance)),
-    p90: center + value.p90_fixed_min + value.p90_per_km_min * distance,
+    p10: Math.max(0, center - earlyWidth),
+    p90: center + lateWidth,
   };
 }
 
@@ -1196,7 +1219,6 @@ function estimateSimpleDistance(input, settings) {
   };
 }
 
-const QUICK_RETURN_SPEED_KMH = 16;
 const QUICK_RETURN_DISTANCE_KEY = 'ride-planning-lab-quick-return-distance-v1';
 const QUICK_RETURN_BUFFER_KEY = 'ride-planning-lab-quick-return-buffer-minutes-v1';
 const QUICK_RETURN_MAX_DISTANCE_KM = 150;
@@ -1210,14 +1232,21 @@ function nonnegative(value, label) {
   return number;
 }
 
-function estimateQuickReturn(distanceKm, extraMinutes = 0, now = new Date()) {
+function estimateQuickReturn(distanceKm, extraMinutes, now, predictionModel, simpleSettings, artifact) {
   const distance = nonnegative(distanceKm, '残距離');
   const extra = nonnegative(extraMinutes, '予定停止・余裕時間');
   if (!(now instanceof Date) || Number.isNaN(now.getTime())) throw new Error('現在時刻を取得できません。');
-  const remainingMinutes = distance / QUICK_RETURN_SPEED_KMH * 60 + extra;
+  const input = { distance_km: distance, departure_epoch_sec: now.getTime() / 1000,
+    event_minutes: [], unexpected_buffer_minutes: extra };
+  const prediction = predictionModel === 'simple'
+    ? estimateSimpleDestination(input, simpleSettings)
+    : estimateDestination(input, artifact);
   return {
-    arrivalAt: new Date(now.getTime() + remainingMinutes * 60000),
-    remainingMinutes,
+    arrivalAt: new Date(prediction.arrival_at * 1000),
+    earlyArrivalAt: new Date(prediction.arrival_lower_at * 1000),
+    lateArrivalAt: new Date(prediction.arrival_upper_at * 1000),
+    remainingMinutes: prediction.elapsed_time_sec / 60,
+    predictionModel,
   };
 }
 
@@ -1257,13 +1286,16 @@ function loadBufferMinutes(storage) {
   }
 }
 
-function initializeQuickReturn(now = () => new Date(), storage = globalThis.localStorage) {
+function initializeQuickReturn({ now = () => new Date(), storage = globalThis.localStorage,
+  model = () => 'simple', settings = () => undefined, artifact = () => undefined } = {}) {
   const form = document.querySelector('#quick-return-form');
   const arrival = document.querySelector('#quick-return-arrival');
+  const earlyArrival = document.querySelector('#quick-return-early');
+  const lateArrival = document.querySelector('#quick-return-late');
   const remaining = document.querySelector('#quick-return-duration');
   const calculatedAt = document.querySelector('#quick-return-calculated-at');
   const error = document.querySelector('#quick-return-error');
-  if (!form || !arrival || !remaining || !calculatedAt || !error) return () => {};
+  if (!form || !arrival || !earlyArrival || !lateArrival || !remaining || !calculatedAt || !error) return () => {};
   const distance = form.elements.remaining_distance_km;
   const buffer = form.elements.extra_minutes;
   distance.innerHTML = Array.from(
@@ -1287,18 +1319,25 @@ function initializeQuickReturn(now = () => new Date(), storage = globalThis.loca
         distance.value,
         buffer.value,
         calculationTime,
+        model(),
+        settings(),
+        artifact(),
       );
       try {
         storage?.setItem(QUICK_RETURN_DISTANCE_KEY, distance.value);
         storage?.setItem(QUICK_RETURN_BUFFER_KEY, buffer.value);
       } catch (error) { /* optional */ }
-      arrival.textContent = `帰宅予想 ${quickReturnClock(result.arrivalAt)}`;
+      arrival.textContent = `中央 ${quickReturnClock(result.arrivalAt)}`;
+      earlyArrival.textContent = `早め ${quickReturnClock(result.earlyArrivalAt)}`;
+      lateArrival.textContent = `遅め ${quickReturnClock(result.lateArrivalAt)}`;
       remaining.textContent = `残り約${quickReturnDuration(result.remainingMinutes)}`;
       calculatedAt.textContent = `現在 ${quickReturnClock(calculationTime)} 時点`;
       error.textContent = '';
       error.classList.add('hidden');
     } catch (reason) {
       arrival.textContent = '帰宅予想 —';
+      earlyArrival.textContent = '早め —';
+      lateArrival.textContent = '遅め —';
       remaining.textContent = '残り時間を計算できません';
       calculatedAt.textContent = '計算時刻 —';
       error.textContent = reason.message;
@@ -1352,7 +1391,7 @@ function setSnapshotNameDraft(mode, value) {
 
 function modelInput() {
   return selectedModelIsSimple()
-    ? { prediction_model: 'simple', simple_model_id: 'simple-distance-rate-trial-v1',
+    ? { prediction_model: 'simple', simple_model_id: SIMPLE_MODEL_ID,
         simple_model_parameters: { ...simpleSettings } }
     : { prediction_model: 'current' };
 }
@@ -1360,7 +1399,7 @@ function modelInput() {
 function modelReproduction() {
   const value = { ...reproduction(), prediction_model: predictionModel };
   if (selectedModelIsSimple()) {
-    value.simple_model_id = 'simple-distance-rate-trial-v1';
+    value.simple_model_id = SIMPLE_MODEL_ID;
     value.simple_model_parameters = { ...simpleSettings };
   }
   return value;
@@ -1495,7 +1534,11 @@ document.querySelector('#distance-form').addEventListener('submit', event => {
 initializeInputs(getArtifact);
 ridePlanUi = initializeSnapshotUi(currentCalculations, reproduction, setSnapshotNameDraft);
 initializeUpdateManager();
-const recalculateQuickReturn = initializeQuickReturn();
+const recalculateQuickReturn = initializeQuickReturn({
+  model: () => predictionModel,
+  settings: () => simpleSettings,
+  artifact: getArtifact,
+});
 
 function showSection(name) {
   const calculation = name === 'destination' || name === 'distance';
@@ -1527,6 +1570,7 @@ modelSelector.addEventListener('change', () => {
     ? '保存済み設定の簡易モデルを使用します。暫定比較用です。'
     : '現行モデルを使用します。';
   clearResults();
+  recalculateQuickReturn();
 });
 
 const settingsForm = document.querySelector('#simple-settings-form');
@@ -1547,6 +1591,7 @@ settingsForm.addEventListener('input', () => {
     status.textContent = 'この端末に保存しました。';
     clearResults();
     drawModelGraph();
+    recalculateQuickReturn();
   } catch (error) {
     status.textContent = error.message;
   }
@@ -1558,12 +1603,13 @@ document.querySelector('#reset-simple-settings').addEventListener('click', () =>
   document.querySelector('#settings-status').textContent = '初期値へ戻しました。';
   clearResults();
   drawModelGraph();
+  recalculateQuickReturn();
 });
 
 document.addEventListener('rideplanning:load-model', event => {
   const detail = event.detail || {};
   if (detail.prediction_model === 'simple') {
-    simpleSettings = saveSimpleSettings(detail.simple_model_parameters);
+    simpleSettings = saveSimpleSettings(migrateSimpleSettings(detail.simple_model_parameters));
     fillSettingsForm(simpleSettings);
     modelSelector.value = 'simple';
   } else {
