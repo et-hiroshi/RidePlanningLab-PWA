@@ -1,5 +1,5 @@
 import {RUNTIME_VERSION, estimateDestination, estimateDistance, validateArtifact} from './runtime/ride_planning_runtime.js';
-import {APP_VERSION, CALCULATION_CONTRACT_VERSION, appendExecutionSnapshot, createExecutionSnapshot, deleteAllExecutionSnapshots, deleteExecutionSnapshot, executionSnapshotsFilename, executionSnapshotsJsonl, loadExecutionSnapshots, sameExecutionSnapshotContent} from './execution_snapshots.js?v=ride-planning-ui-v26';
+import {APP_VERSION, CALCULATION_CONTRACT_VERSION, appendExecutionSnapshot, createExecutionSnapshot, deleteAllExecutionSnapshots, deleteExecutionSnapshot, executionSnapshotsFilename, executionSnapshotsJsonl, loadExecutionSnapshots, sameExecutionSnapshotContent} from './execution_snapshots.js?v=ride-planning-ui-v27';
 
 const presets = [
   ['collection', 'カード収集', 10, true],
@@ -183,18 +183,16 @@ function commonResult(result, primary, supporting, fixed, mode) {
   </section>`;
 }
 
-const rangeBasis = '<small class="range-basis">過去実績から推定した目安です（必ず収まる範囲ではありません）</small>';
-
 function renderDestinationResult(result, input) {
   const primary = `<div class="primary-result"><span>標準予測</span><strong>${duration(result.elapsed_time_sec)}</strong><b>${clock(input.epoch, result.arrival_at)} 帰宅</b></div>`;
-  const supporting = `<div class="supporting-range"><strong>${duration(result.elapsed_lower_sec)} 〜 ${duration(result.elapsed_upper_sec)}</strong><small>${clock(input.epoch, result.arrival_lower_at)} 〜 ${clock(input.epoch, result.arrival_upper_at)}</small>${rangeBasis}</div>`;
+  const supporting = `<div class="supporting-range"><strong>${duration(result.elapsed_lower_sec)} 〜 ${duration(result.elapsed_upper_sec)}</strong><small>${clock(input.epoch, result.arrival_lower_at)} 〜 ${clock(input.epoch, result.arrival_upper_at)}</small></div>`;
   const fixed = `<p class="departure">出発 ${escapeHtml(input.departure_time)}</p>`;
   return commonResult(result, primary, supporting, fixed, 'destination');
 }
 
 function renderDistanceResult(result, input) {
   const primary = `<div class="primary-result"><span>標準予測</span><strong>${km(result.prototype_max_distance_km)}</strong></div>`;
-  const supporting = `<div class="supporting-range"><strong>${km(result.distance_lower_km)} 〜 ${km(result.distance_upper_km)}</strong>${rangeBasis}</div>`;
+  const supporting = `<div class="supporting-range"><strong>${km(result.distance_lower_km)} 〜 ${km(result.distance_upper_km)}</strong></div>`;
   const fixed = `<div class="fixed"><div><span>出発時刻</span><br><strong>${escapeHtml(input.departure_time)}</strong></div><b>→</b><div><span>帰宅期限</span><br><strong>${escapeHtml(input.deadline_time)}</strong></div><div><span>利用可能時間</span><br><strong>${duration(result.available_time_sec)}</strong></div></div>`;
   return commonResult(result, primary, supporting, fixed, 'distance');
 }
@@ -1327,17 +1325,17 @@ function initializeQuickReturn({ now = () => new Date(), storage = globalThis.lo
         storage?.setItem(QUICK_RETURN_DISTANCE_KEY, distance.value);
         storage?.setItem(QUICK_RETURN_BUFFER_KEY, buffer.value);
       } catch (error) { /* optional */ }
-      arrival.textContent = `中央 ${quickReturnClock(result.arrivalAt)}`;
-      earlyArrival.textContent = `早め ${quickReturnClock(result.earlyArrivalAt)}`;
-      lateArrival.textContent = `遅め ${quickReturnClock(result.lateArrivalAt)}`;
+      arrival.textContent = quickReturnClock(result.arrivalAt);
+      earlyArrival.textContent = quickReturnClock(result.earlyArrivalAt);
+      lateArrival.textContent = quickReturnClock(result.lateArrivalAt);
       remaining.textContent = `残り約${quickReturnDuration(result.remainingMinutes)}`;
       calculatedAt.textContent = `現在 ${quickReturnClock(calculationTime)} 時点`;
       error.textContent = '';
       error.classList.add('hidden');
     } catch (reason) {
-      arrival.textContent = '帰宅予想 —';
-      earlyArrival.textContent = '早め —';
-      lateArrival.textContent = '遅め —';
+      arrival.textContent = '—';
+      earlyArrival.textContent = '—';
+      lateArrival.textContent = '—';
       remaining.textContent = '残り時間を計算できません';
       calculatedAt.textContent = '計算時刻 —';
       error.textContent = reason.message;

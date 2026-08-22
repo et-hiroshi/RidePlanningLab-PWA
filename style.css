@@ -511,24 +511,12 @@ footer {
 .quick-return-picker-label { text-align: center; }
 .quick-return-result {
   display: grid;
-  gap: 8px;
+  gap: 2px;
   margin: 22px 0 14px;
-  padding: 22px 14px;
-  border-radius: 14px;
-  background: #0d4d31;
-  color: white;
   text-align: center;
 }
-.quick-return-result strong { font-size: clamp(2rem, 11vw, 3.1rem); line-height: 1.1; }
-.quick-return-result span { font-size: 1.15rem; }
-.quick-return-range { display:grid; grid-template-columns:1fr 1fr; grid-template-areas:"center center" "early late"; align-items:baseline; gap:8px 14px; width:100%; text-align:center; }
-.quick-return-range strong { grid-area:center; }
-.quick-return-range span:first-child { grid-area:early; text-align:right; }
-.quick-return-range span:last-child { grid-area:late; text-align:left; }
 .settings-help { color:#56665e; font-size:.9rem; }
-.quick-return-result small { color: #fff; font-size: .78rem; font-weight: 500; }
-.quick-return-note { margin-bottom: 6px; font-weight: 700; }
-.quick-return-caution { margin-top: 0; color: #56665e; font-size: .9rem; }
+.quick-return-result > small { color:var(--muted); font-size:.78rem; font-weight:500; }
 .model-tools {
   margin: 12px 0 0;
   padding: 14px;
