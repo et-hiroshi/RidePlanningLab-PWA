@@ -1,5 +1,5 @@
-import {RUNTIME_VERSION, estimateDestination, estimateDistance, validateArtifact} from './runtime/ride_planning_runtime.js';
-import {APP_VERSION, CALCULATION_CONTRACT_VERSION, appendExecutionSnapshot, createExecutionSnapshot, deleteAllExecutionSnapshots, deleteExecutionSnapshot, executionSnapshotsFilename, executionSnapshotsJsonl, loadExecutionSnapshots, sameExecutionSnapshotContent} from './execution_snapshots.js?v=ride-planning-ui-v28';
+import {RUNTIME_VERSION, estimateDestination, estimateDistance, validateArtifact} from './runtime/ride_planning_runtime.js?v=ride-planning-ui-v29';
+import {APP_VERSION, CALCULATION_CONTRACT_VERSION, appendExecutionSnapshot, createExecutionSnapshot, deleteAllExecutionSnapshots, deleteExecutionSnapshot, executionSnapshotsFilename, executionSnapshotsJsonl, loadExecutionSnapshots, sameExecutionSnapshotContent} from './execution_snapshots.js?v=ride-planning-ui-v29';
 
 const presets = [
   ['collection', 'カード収集', 10, true],
@@ -839,6 +839,15 @@ async function sha256(buffer) {
 }
 
 function showCompatibility(actualSha) {
+  const diagnostic = {
+    runtime_version: RUNTIME_VERSION,
+    artifact_runtime_version: artifact?.runtime_version || null,
+    artifact_schema_version: artifact?.schema_version || null,
+    expected_runtime_version: buildInfo?.expected_runtime_version || null,
+    expected_runtime_schema: buildInfo?.expected_runtime_schema || null,
+    expected_artifact_sha256: buildInfo?.artifact_sha256 || null,
+    actual_artifact_sha256: actualSha || null,
+  };
   const compatible = Boolean(buildInfo && actualSha)
     && buildInfo.schema_version === 'ride-planning-build-info-v1'
     && buildInfo.expected_runtime_version === RUNTIME_VERSION
@@ -846,7 +855,9 @@ function showCompatibility(actualSha) {
     && buildInfo.expected_runtime_schema === artifact?.schema_version
     && buildInfo.ui_runtime_generation === runtimeGeneration(RUNTIME_VERSION)
     && buildInfo.artifact_sha256 === actualSha;
-  document.querySelector('#cache-warning').classList.toggle('hidden', compatible);
+  const warning = document.querySelector('#cache-warning');
+  warning.classList.toggle('hidden', compatible);
+  warning.dataset.compatibilityDiagnostic = JSON.stringify(diagnostic);
   return compatible;
 }
 
@@ -887,8 +898,11 @@ async function renderServiceWorkerInfo(registration) {
 
 async function waitForWaiting(registration, timeout = 5000) {
   if (registration.waiting) return registration.waiting;
-  return new Promise(resolve => {
-    const timer = setTimeout(() => resolve(registration.waiting), timeout);
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      if (registration.installing) reject(new Error('新しいbundleの取得が完了しませんでした。'));
+      else resolve(registration.waiting);
+    }, timeout);
     const installing = registration.installing;
     if (!installing) {
       clearTimeout(timer);
@@ -896,12 +910,38 @@ async function waitForWaiting(registration, timeout = 5000) {
       return;
     }
     installing.addEventListener('statechange', () => {
-      if (installing.state === 'installed' || installing.state === 'redundant') {
+      if (installing.state === 'installed') {
         clearTimeout(timer);
         resolve(registration.waiting);
+      } else if (installing.state === 'redundant') {
+        clearTimeout(timer);
+        reject(new Error('新しいbundleを完全に取得できませんでした。'));
       }
     });
   });
+}
+
+async function workerVersion(worker) {
+  const value = await workerMessage(worker, 'GET_VERSION');
+  if (!value?.cacheId) throw new Error('Service Workerのbundle識別を確認できません。');
+  return value;
+}
+
+async function waitForControllerCache(cacheId, timeout = 5000) {
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    const controller = navigator.serviceWorker.controller;
+    if (controller) {
+      try {
+        const value = await workerVersion(controller);
+        if (value.cacheId === cacheId) return controller;
+      } catch (error) {
+        // The controller may be changing between generations; retry until the deadline.
+      }
+    }
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
+  throw new Error('新しいbundleへの切替を確認できませんでした。');
 }
 
 async function refreshAssets() {
@@ -915,15 +955,17 @@ async function refreshAssets() {
       || await withTimeout(navigator.serviceWorker.ready, 3000, 'Service Worker登録');
     await withTimeout(registration.update(), 5000, 'Service Worker更新');
     const waiting = await waitForWaiting(registration);
+    let worker = navigator.serviceWorker.controller || registration.active;
     if (waiting) {
-      const changed = new Promise(resolve => navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true }));
+      const target = await workerVersion(waiting);
       await workerMessage(waiting, 'ACTIVATE_UPDATE');
-      await Promise.race([changed, new Promise(resolve => setTimeout(resolve, 3000))]);
+      worker = await waitForControllerCache(target.cacheId);
     }
-    const refreshed = await workerMessage(
-      navigator.serviceWorker.controller || registration.active, 'REFRESH_ASSETS', 10000,
-    );
-    if (!refreshed?.refreshed) throw new Error('最新assetを取得できませんでした。');
+    const current = await workerVersion(worker);
+    const verified = await workerMessage(worker, 'VERIFY_ASSETS', 10000);
+    if (!verified?.valid || verified.cacheId !== current.cacheId) {
+      throw new Error(verified?.error || '最新assetの完全性を確認できませんでした。');
+    }
     status.textContent = '最新版を取得しました。再読み込みします…';
     location.reload();
   } catch (error) {
@@ -956,7 +998,12 @@ async function loadArtifact() {
     setText('#artifact-sha', '取得失敗');
     updateAllSubmitStates();
     const node = document.querySelector('#fatal');
-    node.textContent = `${error.message} 初回利用またはcache消去後は、通信可能な状態で開き直してください。`;
+    const diagnostic = error.compatibilityDiagnostic;
+    node.dataset.compatibilityDiagnostic = diagnostic ? JSON.stringify(diagnostic) : '';
+    const detail = diagnostic
+      ? ` 診断: runtime=${diagnostic.runtime_version}, artifact runtime=${diagnostic.artifact_runtime_version}, artifact schema=${diagnostic.artifact_schema_version}`
+      : '';
+    node.textContent = `${error.message}${detail} 初回利用またはcache消去後は、通信可能な状態で開き直してください。`;
     node.classList.remove('hidden');
     return null;
   }
@@ -992,7 +1039,8 @@ async function initializeServiceWorker() {
   }
   try {
     await withTimeout((async () => {
-      const registration = await navigator.serviceWorker.register('./service-worker.js');
+      const registration = await navigator.serviceWorker.register(
+        './service-worker.js', { updateViaCache: 'none' });
       serviceWorkerRegistration = registration;
       const ready = await navigator.serviceWorker.ready;
       await renderServiceWorkerInfo(ready);

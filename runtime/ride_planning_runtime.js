@@ -12,7 +12,15 @@ export function validateArtifact(a) {
   if (!a || a.product_identity !== 'ride-planning-lab' ||
       a.schema_version !== SCHEMA || a.runtime_version !== RUNTIME_VERSION ||
       a.prototype_status !== 'personal_use_operational_natural_release') {
-    throw new Error('予測データと計算runtimeのversionが一致しません。オンライン時に更新してください。');
+    const error = new Error('予測データと計算runtimeのversionが一致しません。オンライン時に更新してください。');
+    error.compatibilityDiagnostic = {
+      runtime_version: RUNTIME_VERSION,
+      artifact_runtime_version: a?.runtime_version || null,
+      artifact_schema_version: a?.schema_version || null,
+      artifact_product_identity: a?.product_identity || null,
+      artifact_prototype_status: a?.prototype_status || null,
+    };
+    throw error;
   }
   finite(a.moving?.median_sec_per_km, 'moving rate', false);
   const continuousNatural=a.natural?.model==='linear_rate_transition_40_60_then_60_150';
