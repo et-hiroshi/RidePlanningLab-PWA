@@ -1,5 +1,5 @@
-import {ARTIFACT_SCHEMA_VERSION, RUNTIME_VERSION, estimateDestination, estimateDistance, validateArtifact} from './runtime/ride_planning_runtime.js?v=ride-planning-ui-v31';
-import {APP_VERSION, CALCULATION_CONTRACT_VERSION, appendExecutionSnapshot, createExecutionSnapshot, deleteAllExecutionSnapshots, deleteExecutionSnapshot, executionSnapshotsFilename, executionSnapshotsJsonl, loadExecutionSnapshots, sameExecutionSnapshotContent} from './execution_snapshots.js?v=ride-planning-ui-v31';
+import {ARTIFACT_SCHEMA_VERSION, RUNTIME_VERSION, estimateDestination, estimateDistance, validateArtifact} from './runtime/ride_planning_runtime.js?v=ride-planning-ui-v32';
+import {APP_VERSION, CALCULATION_CONTRACT_VERSION, appendExecutionSnapshot, createExecutionSnapshot, deleteAllExecutionSnapshots, deleteExecutionSnapshot, executionSnapshotsFilename, executionSnapshotsJsonl, loadExecutionSnapshots, sameExecutionSnapshotContent} from './execution_snapshots.js?v=ride-planning-ui-v32';
 
 const presets = [
   ['collection', 'カード収集', 10, true],
@@ -8,6 +8,10 @@ const presets = [
   ['sightseeing', '観光・見学', 30, false],
   ['other', 'その他', 10, false],
 ];
+
+const plannedEventTypes = Object.freeze(
+  presets.map(([event_code, label]) => Object.freeze({ event_code, label })),
+);
 
 let artifactProvider = () => undefined;
 let initialized = false;
@@ -1098,12 +1102,6 @@ const itineraryFinite = (value, label) => {
   return number;
 };
 
-function pointLabel(point, index, count) {
-  if (index === 0) return '出発';
-  if (index === count - 1) return '到着';
-  return String(point.name || '').trim() || `ポイント${index}`;
-}
-
 function clockText(epochSec, originEpochSec) {
   const date = new Date(epochSec * 1000);
   const origin = new Date(originEpochSec * 1000);
@@ -1133,6 +1131,8 @@ function calculateItinerary(rawPoints, anchor, predictBase, reserveSec = 0) {
   }
   const points = rawPoints.map((point, index) => ({
     point_id: String(point.point_id || ''), name: String(point.name || ''),
+    planned_event_code: index > 0 && index < rawPoints.length - 1
+      ? (point.planned_event_code || null) : null,
     leg_distance_km: index === 0 ? 0 : itineraryFinite(point.leg_distance_km, '区間距離'),
     stay_duration_sec: index > 0 && index < rawPoints.length - 1
       ? itineraryFinite(point.stay_duration_sec, '滞在時間') : 0,
@@ -1595,8 +1595,8 @@ let inputMode = 'simple';
 const pointUuid = () => globalThis.crypto.randomUUID();
 let itineraryState = {
   points: [
-    { point_id: pointUuid(), name: '', leg_distance_km: 0, stay_duration_sec: 0 },
-    { point_id: pointUuid(), name: '', leg_distance_km: 140, stay_duration_sec: 0 },
+    { point_id: pointUuid(), name: '', leg_distance_km: 0, stay_duration_sec: 0, planned_event_code: null },
+    { point_id: pointUuid(), name: '', leg_distance_km: 140, stay_duration_sec: 0, planned_event_code: null },
   ],
   anchor: { point_id: null, kind: 'departure', epoch_sec: epoch('08:00') },
 };
@@ -1625,6 +1625,16 @@ function revealCalculation(node, html, mode) {
   const field = node.querySelector('[data-snapshot-name]');
   if (field) field.value = snapshotNameDrafts[mode];
   ridePlanUi?.refreshSaveControls();
+}
+
+function updateCalculation(node, html, mode, shouldReveal = false) {
+  if (shouldReveal) revealCalculation(node, html, mode);
+  else {
+    node.innerHTML = html;
+    const field = node.querySelector('[data-snapshot-name]');
+    if (field) field.value = snapshotNameDrafts[mode];
+    ridePlanUi?.refreshSaveControls();
+  }
 }
 
 function setSnapshotNameDraft(mode, value) {
@@ -1692,8 +1702,36 @@ function itineraryEvents(points) {
   return points.slice(1, -1).map((point, index) => ({
     event_code: point.point_id, event_type: 'other', role: index === 0 ? 'primary' : 'secondary',
     display_name: point.name.trim() || `ポイント${index + 1}`, route_order: index,
+    planned_event_type_code: point.planned_event_code || null,
     planned_duration_sec: point.stay_duration_sec,
   }));
+}
+
+
+function pickerOptions(start, end, selected, format = value => String(value)) {
+  return Array.from({ length: end - start + 1 }, (_, offset) => {
+    const value = start + offset;
+    return `<option value="${value}"${value === selected ? ' selected' : ''}>${format(value)}</option>`;
+  }).join('');
+}
+
+function distancePicker(point) {
+  const value = Number(point.leg_distance_km || 0);
+  const whole = Math.min(500, Math.floor(value));
+  const tenth = whole === 500 ? 0 : Math.round((value - whole) * 10);
+  return `<div class="itinerary-picker distance-picker"><select data-point-field="distance_whole" data-target-point-id="${point.point_id}" aria-label="区間距離 km">${pickerOptions(0, 500, whole, item => `${item} km`)}</select><select data-point-field="distance_tenth" data-target-point-id="${point.point_id}" aria-label="区間距離 小数">${pickerOptions(0, 9, tenth, item => `.${item}`)}</select></div>`;
+}
+
+function stayPicker(point) {
+  const minutes = Math.max(0, Math.round(Number(point.stay_duration_sec || 0) / 60));
+  const hours = Math.min(24, Math.floor(minutes / 60));
+  const remainder = hours === 24 ? 0 : minutes % 60;
+  return `<div class="itinerary-picker stay-picker"><select data-point-field="stay_hours" aria-label="滞在時間 時間">${pickerOptions(0, 24, hours, item => `${item}時間`)}</select><select data-point-field="stay_minutes" aria-label="滞在時間 分">${pickerOptions(0, 59, remainder, item => `${item}分`)}</select></div>`;
+}
+
+function eventTypePicker(point) {
+  const options = plannedEventTypes.map(item => `<option value="${item.event_code}"${item.event_code === point.planned_event_code ? ' selected' : ''}>${item.label}</option>`).join('');
+  return `<select data-point-field="planned_event_code" aria-label="滞在種別"><option value=""${point.planned_event_code ? '' : ' selected'}>未指定</option>${options}</select>`;
 }
 
 function itinerarySnapshot(result, aggregate, reserveMinutes) {
@@ -1713,20 +1751,21 @@ function renderItinerary(aggregate = null) {
   root.innerHTML = itineraryState.points.map((point, index) => {
     const middle = index > 0 && index < itineraryState.points.length - 1;
     const calculated = aggregate?.points[index];
+    const nextPoint = itineraryState.points[index + 1];
     const anchor = itineraryState.anchor.point_id === point.point_id;
-    const arrival = index > 0 ? `<label>到着時刻 <span>${anchor ? '指定' : '予測'}</span>${middle || index === itineraryState.points.length - 1 ? `<input type="time" data-point-time="arrival" data-point-id="${point.point_id}" value="${calculated ? timeValue(calculated.arrival_epoch_sec) : ''}">${calculated ? `<small>${clockText(calculated.arrival_epoch_sec, aggregate.departure_epoch_sec)}</small>` : ''}` : ''}</label>` : '';
+    const anchorMark = anchor ? '<small class="anchor-mark">指定</small>' : '';
+    const arrival = index > 0 ? `<label>到着時刻 ${anchorMark}<input type="time" data-point-time="arrival" data-point-id="${point.point_id}" value="${calculated ? timeValue(calculated.arrival_epoch_sec) : ''}">${calculated ? `<small>${clockText(calculated.arrival_epoch_sec, aggregate.departure_epoch_sec)}</small>` : ''}</label>` : '';
     const departure = index === 0
-      ? `<label>出発時刻 <span>${anchor ? '指定' : '予測'}</span><input type="time" data-point-time="departure" data-point-id="${point.point_id}" value="${calculated ? timeValue(calculated.departure_epoch_sec) : timeValue(itineraryState.anchor.epoch_sec)}"></label>`
-      : middle ? `<label>出発時刻 <span>予測</span><div class="itinerary-clock">${calculated ? clockText(calculated.departure_epoch_sec, aggregate.departure_epoch_sec) : '—'}</div></label>` : '';
-    return `<article class="itinerary-point" data-point-id="${point.point_id}"><header><strong>${escapeHtml(pointLabel(point, index, itineraryState.points.length))}</strong>${middle ? `<button type="button" class="itinerary-remove" data-remove-point="${point.point_id}">削除</button>` : ''}</header>
-      ${index ? `<div class="itinerary-leg"><label>前のポイントからの区間距離（km）<input type="number" min="0" max="500" step="0.1" inputmode="decimal" data-point-field="leg_distance_km" value="${point.leg_distance_km ?? ''}"></label><span>↓</span></div>` : ''}
-      ${middle ? `<label>名称（任意）<input maxlength="60" data-point-field="name" value="${escapeHtml(point.name)}" placeholder="ポイント${index}"></label>` : ''}
-      <div class="itinerary-times">${arrival}${middle ? `<label>滞在時間（分）<input type="number" min="0" step="1" inputmode="numeric" data-point-field="stay_minutes" value="${point.stay_duration_sec / 60}"></label>` : ''}${departure}</div></article>`;
+      ? `<label>出発時刻 ${anchorMark}<input type="time" data-point-time="departure" data-point-id="${point.point_id}" value="${calculated ? timeValue(calculated.departure_epoch_sec) : timeValue(itineraryState.anchor.epoch_sec)}"></label>`
+      : middle ? `<label>出発時刻<div class="itinerary-clock">${calculated ? clockText(calculated.departure_epoch_sec, aggregate.departure_epoch_sec) : '—'}</div></label>` : '';
+    return `<article class="itinerary-point" data-point-id="${point.point_id}">${middle ? `<div class="itinerary-name-row"><input maxlength="60" aria-label="店名・地点名（任意）" data-point-field="name" value="${escapeHtml(point.name)}" placeholder="店名・地点名（任意）"><button type="button" class="itinerary-remove" data-remove-point="${point.point_id}">削除</button></div>` : `<strong class="endpoint-label">${index === 0 ? '出発' : '到着'}</strong>`}
+      <div class="itinerary-times">${arrival}${middle ? `<label>滞在種別${eventTypePicker(point)}</label><label>滞在時間${stayPicker(point)}</label>` : ''}${departure}</div>
+      ${nextPoint ? `<div class="itinerary-leg"><label>次の地点までの区間距離${distancePicker(nextPoint)}</label><span>↓</span></div>` : ''}</article>`;
   }).join('');
   document.querySelector('#add-itinerary-point').disabled = itineraryState.points.length >= MAX_ITINERARY_POINTS;
 }
 
-function recalculateItinerary() {
+function recalculateItinerary(shouldReveal = false) {
   const status = document.querySelector('#itinerary-status');
   currentCalculations.destination = null;
   try {
@@ -1747,10 +1786,10 @@ function recalculateItinerary() {
     document.querySelector('#itinerary-total-planned').textContent = `${Math.round(aggregate.planned_event_time_sec / 60)}分`;
     status.textContent = '';
     renderItinerary(aggregate);
-    revealCalculation(document.querySelector('#destination-result'), renderDestinationResult(result, {
+    updateCalculation(document.querySelector('#destination-result'), renderDestinationResult(result, {
       departure_time: clockText(aggregate.departure_epoch_sec, aggregate.departure_epoch_sec),
       epoch: aggregate.departure_epoch_sec,
-    }), 'destination');
+    }), 'destination', shouldReveal);
   } catch (error) {
     lastItineraryAggregate = null;
     renderItinerary();
@@ -1876,7 +1915,7 @@ document.querySelectorAll('[data-input-mode]').forEach(button => {
 document.querySelector('#add-itinerary-point').addEventListener('click', () => {
   if (itineraryState.points.length >= MAX_ITINERARY_POINTS) return;
   itineraryState.points.splice(-1, 0, {
-    point_id: pointUuid(), name: '', leg_distance_km: '', stay_duration_sec: 0,
+    point_id: pointUuid(), name: '', leg_distance_km: 0, stay_duration_sec: 0, planned_event_code: null,
   });
   recalculateItinerary();
 });
@@ -1895,10 +1934,20 @@ document.querySelector('#itinerary-points').addEventListener('click', event => {
 document.querySelector('#itinerary-form').addEventListener('change', event => {
   const card = event.target.closest('[data-point-id]');
   if (card && event.target.dataset.pointField) {
-    const point = itineraryState.points.find(item => item.point_id === card.dataset.pointId);
+    const point = itineraryState.points.find(item => item.point_id === (event.target.dataset.targetPointId || card.dataset.pointId));
     const field = event.target.dataset.pointField;
     if (field === 'name') point.name = event.target.value;
-    else if (field === 'stay_minutes') point.stay_duration_sec = event.target.value === '' ? '' : Number(event.target.value) * 60;
+    else if (field === 'planned_event_code') point.planned_event_code = event.target.value || null;
+    else if (field === 'distance_whole' || field === 'distance_tenth') {
+      const picker = event.target.closest('.distance-picker');
+      const whole = Number(picker.querySelector('[data-point-field=distance_whole]').value);
+      const tenth = whole === 500 ? 0 : Number(picker.querySelector('[data-point-field=distance_tenth]').value);
+      point.leg_distance_km = whole + tenth / 10;
+    } else if (field === 'stay_hours' || field === 'stay_minutes') {
+      const hours = Number(card.querySelector('[data-point-field=stay_hours]').value);
+      const minutes = hours === 24 ? 0 : Number(card.querySelector('[data-point-field=stay_minutes]').value);
+      point.stay_duration_sec = (hours * 60 + minutes) * 60;
+    }
     else point[field] = event.target.value === '' ? '' : Number(event.target.value);
   }
   if (event.target.dataset.pointTime) {
@@ -1910,6 +1959,11 @@ document.querySelector('#itinerary-form').addEventListener('change', event => {
       epoch_sec: epochForEditedClock(event.target.value, reference) };
   }
   recalculateItinerary();
+});
+document.querySelector('#itinerary-form').addEventListener('submit', event => {
+  event.preventDefault();
+  rememberSnapshotName(document.querySelector('#destination-result'), 'destination');
+  recalculateItinerary(true);
 });
 document.addEventListener('rideplanning:load-itinerary', event => {
   const saved = event.detail;

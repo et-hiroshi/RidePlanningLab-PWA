@@ -1,4 +1,4 @@
-export const APP_VERSION='ride-planning-ui-v31';
+export const APP_VERSION='ride-planning-ui-v32';
 export const SNAPSHOT_SCHEMA_VERSION='ride-plan-execution-snapshot-v1';
 export const ITINERARY_SNAPSHOT_SCHEMA_VERSION='ride-plan-execution-snapshot-v2';
 export const SNAPSHOT_RECORD_TYPE='ride_plan_execution_snapshot';
@@ -51,7 +51,7 @@ export function validateExecutionSnapshot(record){
   if(record.schema_version===ITINERARY_SNAPSHOT_SCHEMA_VERSION){
     if(calculation.mode!=='distance_to_time'||itinerary?.mode!=='itinerary'||!Array.isArray(itinerary.points)||itinerary.points.length<2||itinerary.points.length>20)throw new Error('行程情報が不正です。');
     const ids=new Set();
-    itinerary.points.forEach((point,index)=>{if(typeof point?.point_id!=='string'||!point.point_id||ids.has(point.point_id)||typeof point.name!=='string'||point.name.length>60)throw new Error('行程ポイントが不正です。');ids.add(point.point_id);requireNonnegative(point.leg_distance_km,'区間距離');requireNonnegative(point.stay_duration_sec,'滞在時間');if(index===0&&point.leg_distance_km!==0)throw new Error('行程の出発距離が不正です。');['arrival_epoch_sec','departure_epoch_sec'].forEach(key=>{if(point[key]!==undefined)requireNonnegative(point[key],key)})});
+    itinerary.points.forEach((point,index)=>{if(typeof point?.point_id!=='string'||!point.point_id||ids.has(point.point_id)||typeof point.name!=='string'||point.name.length>60)throw new Error('行程ポイントが不正です。');if(point.planned_event_code!==undefined&&point.planned_event_code!==null&&(typeof point.planned_event_code!=='string'||!point.planned_event_code))throw new Error('行程の予定種別が不正です。');ids.add(point.point_id);requireNonnegative(point.leg_distance_km,'区間距離');requireNonnegative(point.stay_duration_sec,'滞在時間');if(index===0&&point.leg_distance_km!==0)throw new Error('行程の出発距離が不正です。');['arrival_epoch_sec','departure_epoch_sec'].forEach(key=>{if(point[key]!==undefined)requireNonnegative(point[key],key)})});
     if(!itinerary.anchor||!ids.has(itinerary.anchor.point_id)||!['departure','arrival'].includes(itinerary.anchor.kind))throw new Error('行程anchorが不正です。');
     requireNonnegative(itinerary.anchor.epoch_sec,'anchor時刻');
     const anchorIndex=itinerary.points.findIndex(point=>point.point_id===itinerary.anchor.point_id);
