@@ -1,5 +1,5 @@
 import {RUNTIME_VERSION, estimateDestination, estimateDistance, validateArtifact} from './runtime/ride_planning_runtime.js';
-import {APP_VERSION, CALCULATION_CONTRACT_VERSION, appendExecutionSnapshot, createExecutionSnapshot, deleteAllExecutionSnapshots, deleteExecutionSnapshot, executionSnapshotsFilename, executionSnapshotsJsonl, loadExecutionSnapshots, sameExecutionSnapshotContent} from './execution_snapshots.js?v=ride-planning-ui-v27';
+import {APP_VERSION, CALCULATION_CONTRACT_VERSION, appendExecutionSnapshot, createExecutionSnapshot, deleteAllExecutionSnapshots, deleteExecutionSnapshot, executionSnapshotsFilename, executionSnapshotsJsonl, loadExecutionSnapshots, sameExecutionSnapshotContent} from './execution_snapshots.js?v=ride-planning-ui-v28';
 
 const presets = [
   ['collection', 'カード収集', 10, true],
@@ -1353,8 +1353,30 @@ function initializeQuickReturn({ now = () => new Date(), storage = globalThis.lo
 
 const currentCalculations = { destination: null, distance: null };
 const snapshotNameDrafts = { destination: '', distance: '' };
+const MODEL_SELECTION_STORAGE_KEY = 'ride-planning-lab-prediction-model-v1';
+const DEFAULT_PREDICTION_MODEL = 'simple';
+
+function loadPredictionModel(storage = globalThis.localStorage) {
+  try {
+    const value = storage.getItem(MODEL_SELECTION_STORAGE_KEY);
+    return value === 'current' || value === 'simple' ? value : DEFAULT_PREDICTION_MODEL;
+  } catch (error) {
+    return DEFAULT_PREDICTION_MODEL;
+  }
+}
+
+function savePredictionModel(value, storage = globalThis.localStorage) {
+  const selected = value === 'current' || value === 'simple' ? value : DEFAULT_PREDICTION_MODEL;
+  try {
+    storage.setItem(MODEL_SELECTION_STORAGE_KEY, selected);
+  } catch (error) {
+    // Keep the in-memory selection usable when device storage is unavailable.
+  }
+  return selected;
+}
+
 let ridePlanUi;
-let predictionModel = 'simple';
+let predictionModel = loadPredictionModel();
 let simpleSettings = loadSimpleSettings();
 
 function selectedModelIsSimple() {
@@ -1562,13 +1584,19 @@ document.querySelectorAll('[data-section]').forEach(button => {
 });
 
 const modelSelector = document.querySelector('#prediction-model');
-modelSelector.addEventListener('change', () => {
-  predictionModel = modelSelector.value;
+function applyPredictionModel(value) {
+  predictionModel = value === 'current' || value === 'simple' ? value : DEFAULT_PREDICTION_MODEL;
+  modelSelector.value = predictionModel;
   document.querySelector('#model-selection-note').textContent = selectedModelIsSimple()
     ? '保存済み設定の簡易モデルを使用します。暫定比較用です。'
     : '現行モデルを使用します。';
   clearResults();
   recalculateQuickReturn();
+}
+
+applyPredictionModel(predictionModel);
+modelSelector.addEventListener('change', () => {
+  applyPredictionModel(savePredictionModel(modelSelector.value));
 });
 
 const settingsForm = document.querySelector('#simple-settings-form');
@@ -1609,11 +1637,10 @@ document.addEventListener('rideplanning:load-model', event => {
   if (detail.prediction_model === 'simple') {
     simpleSettings = saveSimpleSettings(migrateSimpleSettings(detail.simple_model_parameters));
     fillSettingsForm(simpleSettings);
-    modelSelector.value = 'simple';
+    applyPredictionModel('simple');
   } else {
-    modelSelector.value = 'current';
+    applyPredictionModel('current');
   }
-  modelSelector.dispatchEvent(new Event('change', { bubbles: true }));
 });
 
 function currentGraphMinutes(distance, artifact) {

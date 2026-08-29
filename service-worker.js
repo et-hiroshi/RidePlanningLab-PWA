@@ -1,14 +1,14 @@
-const CACHE = 'ride-planning-lab-c6a1ad54341fced2';
+const CACHE = 'ride-planning-lab-4b1edede62c3cded';
 const PREFIX = 'ride-planning-lab-';
 const VERSION = 'ride-planning-service-worker-v2';
-const UPDATED_AT = '2026-08-22T17:04:39+09:00';
-const ASSETS = ["./app.js", "./apple-touch-icon.png", "./artifacts/ride_planning_runtime_v1.json", "./build-info.json", "./execution_snapshots.js", "./icon-192.png", "./icon-512.png", "./index.html", "./manifest.webmanifest", "./release-info.css", "./runtime/ride_planning_runtime.js", "./style.css", "./index.html?v=ride-planning-ui-v27", "./app.js?v=ride-planning-ui-v27", "./execution_snapshots.js?v=ride-planning-ui-v27", "./release-info.css?v=ride-planning-ui-v27"];
+const UPDATED_AT = '2026-08-29T16:04:43+09:00';
+const ASSETS = ["./app.js", "./apple-touch-icon.png", "./artifacts/ride_planning_runtime_v1.json", "./build-info.json", "./execution_snapshots.js", "./icon-192.png", "./icon-512.png", "./index.html", "./manifest.webmanifest", "./release-info.css", "./runtime/ride_planning_runtime.js", "./style.css", "./index.html?v=ride-planning-ui-v28", "./app.js?v=ride-planning-ui-v28", "./execution_snapshots.js?v=ride-planning-ui-v28", "./release-info.css?v=ride-planning-ui-v28"];
 self.addEventListener('install', event => event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS))));
 self.addEventListener('activate', event => event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key.startsWith(PREFIX) && key !== CACHE).map(key => caches.delete(key)))).then(() => self.clients.claim())));
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET' || new URL(event.request.url).origin !== self.location.origin) return;
   event.respondWith(caches.match(event.request).then(cached => cached || fetch(event.request).catch(() => {
-    if (event.request.mode === 'navigate') return caches.match(new URL('./index.html?v=ride-planning-ui-v27', self.registration.scope).href);
+    if (event.request.mode === 'navigate') return caches.match(new URL('./index.html?v=ride-planning-ui-v28', self.registration.scope).href);
     throw new Error('offline asset is unavailable');
   })));
 });
