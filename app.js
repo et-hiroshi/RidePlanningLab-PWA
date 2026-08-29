@@ -1,5 +1,5 @@
-import {ARTIFACT_SCHEMA_VERSION, RUNTIME_VERSION, estimateDestination, estimateDistance, validateArtifact} from './runtime/ride_planning_runtime.js?v=ride-planning-ui-v30';
-import {APP_VERSION, CALCULATION_CONTRACT_VERSION, appendExecutionSnapshot, createExecutionSnapshot, deleteAllExecutionSnapshots, deleteExecutionSnapshot, executionSnapshotsFilename, executionSnapshotsJsonl, loadExecutionSnapshots, sameExecutionSnapshotContent} from './execution_snapshots.js?v=ride-planning-ui-v30';
+import {ARTIFACT_SCHEMA_VERSION, RUNTIME_VERSION, estimateDestination, estimateDistance, validateArtifact} from './runtime/ride_planning_runtime.js?v=ride-planning-ui-v31';
+import {APP_VERSION, CALCULATION_CONTRACT_VERSION, appendExecutionSnapshot, createExecutionSnapshot, deleteAllExecutionSnapshots, deleteExecutionSnapshot, executionSnapshotsFilename, executionSnapshotsJsonl, loadExecutionSnapshots, sameExecutionSnapshotContent} from './execution_snapshots.js?v=ride-planning-ui-v31';
 
 const presets = [
   ['collection', 'カード収集', 10, true],
@@ -603,6 +603,13 @@ function openPlan(record, plan, setSnapshotNameDraft) {
   const mode = destination ? 'destination' : 'distance';
   document.querySelector(`[data-mode=${mode}]`).click();
   const form = document.querySelector(`#${mode}-form`);
+  if (input.itinerary) {
+    setSnapshotNameDraft(mode, plan.title);
+    document.dispatchEvent(new CustomEvent('rideplanning:load-itinerary', { detail: input.itinerary }));
+    form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    return;
+  }
+  if (destination) document.querySelector('[data-input-mode=simple]').click();
   form.elements.departure_time.value = snapshotClock(input.departure_epoch_sec);
   if (destination) form.elements.distance_km.value = input.distance_km;
   else form.elements.deadline_time.value = snapshotClock(input.return_deadline_epoch_sec);
@@ -1080,6 +1087,123 @@ function initializeUpdateManager() {
   }), 4000);
 }
 
+const ITINERARY_MODE = 'itinerary';
+const MAX_ITINERARY_POINTS = 20;
+const MAX_ITINERARY_DISTANCE_KM = 500;
+
+const itineraryFinite = (value, label) => {
+  if (value === '' || value === null || value === undefined) throw new Error(`${label}を入力してください。`);
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < 0) throw new Error(`${label}は0以上の数値で指定してください。`);
+  return number;
+};
+
+function pointLabel(point, index, count) {
+  if (index === 0) return '出発';
+  if (index === count - 1) return '到着';
+  return String(point.name || '').trim() || `ポイント${index}`;
+}
+
+function clockText(epochSec, originEpochSec) {
+  const date = new Date(epochSec * 1000);
+  const origin = new Date(originEpochSec * 1000);
+  const startDay = new Date(origin.getFullYear(), origin.getMonth(), origin.getDate()).getTime();
+  const day = Math.floor((date.getTime() - startDay) / 86400000);
+  const prefix = day === 1 ? '翌日 ' : day > 1 ? `${day}日後 ` : day < 0 ? '前日 ' : '';
+  return `${prefix}${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
+function timeValue(epochSec) {
+  const date = new Date(epochSec * 1000);
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
+function epochForEditedClock(value, referenceEpochSec) {
+  if (!/^\d{2}:\d{2}$/.test(value || '')) throw new Error('時刻を入力してください。');
+  const [hour, minute] = value.split(':').map(Number);
+  const reference = new Date(referenceEpochSec * 1000);
+  const base = new Date(reference.getFullYear(), reference.getMonth(), reference.getDate(), hour, minute).getTime() / 1000;
+  return [base - 86400, base, base + 86400, base + 172800]
+    .reduce((best, candidate) => Math.abs(candidate - referenceEpochSec) < Math.abs(best - referenceEpochSec) ? candidate : best);
+}
+
+function calculateItinerary(rawPoints, anchor, predictBase, reserveSec = 0) {
+  if (!Array.isArray(rawPoints) || rawPoints.length < 2 || rawPoints.length > MAX_ITINERARY_POINTS) {
+    throw new Error('行程ポイント数が不正です。');
+  }
+  const points = rawPoints.map((point, index) => ({
+    point_id: String(point.point_id || ''), name: String(point.name || ''),
+    leg_distance_km: index === 0 ? 0 : itineraryFinite(point.leg_distance_km, '区間距離'),
+    stay_duration_sec: index > 0 && index < rawPoints.length - 1
+      ? itineraryFinite(point.stay_duration_sec, '滞在時間') : 0,
+  }));
+  if (points.some(point => !point.point_id) || new Set(points.map(point => point.point_id)).size !== points.length) {
+    throw new Error('行程ポイントIDが不正です。');
+  }
+  const anchorIndex = points.findIndex(point => point.point_id === anchor?.point_id);
+  const allowedKind = anchorIndex === 0 ? 'departure' : 'arrival';
+  if (anchorIndex < 0 || anchor?.kind !== allowedKind || !Number.isFinite(anchor.epoch_sec)) {
+    throw new Error('固定時刻が不正です。');
+  }
+  let cumulative = 0;
+  let previous = { moving_time_sec: 0, natural_stop_time_sec: 0 };
+  const legs = points.slice(1).map((point, index) => {
+    cumulative += point.leg_distance_km;
+    if (cumulative > MAX_ITINERARY_DISTANCE_KM) throw new Error('総距離は500km以下で指定してください。');
+    const prediction = predictBase(cumulative);
+    const leg = {
+      from_point_id: points[index].point_id, to_point_id: point.point_id,
+      distance_km: point.leg_distance_km,
+      moving_time_sec: prediction.moving_time_sec - previous.moving_time_sec,
+      natural_stop_time_sec: prediction.natural_stop_time_sec - previous.natural_stop_time_sec,
+    };
+    leg.travel_time_sec = leg.moving_time_sec + leg.natural_stop_time_sec;
+    if (leg.moving_time_sec < -1e-6 || leg.natural_stop_time_sec < -1e-6) throw new Error('区間予測が単調ではありません。');
+    previous = prediction;
+    return leg;
+  });
+  const times = points.map(() => ({}));
+  if (anchorIndex === 0) times[0].departure_epoch_sec = anchor.epoch_sec;
+  else times[anchorIndex].arrival_epoch_sec = anchor.epoch_sec;
+  for (let index = anchorIndex; index < points.length - 1; index += 1) {
+    const departure = index === 0 ? times[index].departure_epoch_sec
+      : times[index].arrival_epoch_sec + points[index].stay_duration_sec;
+    times[index].departure_epoch_sec = departure;
+    times[index + 1].arrival_epoch_sec = departure + legs[index].travel_time_sec;
+  }
+  for (let index = anchorIndex; index > 0; index -= 1) {
+    const priorDeparture = times[index].arrival_epoch_sec - legs[index - 1].travel_time_sec;
+    times[index - 1].departure_epoch_sec = priorDeparture;
+    if (index - 1 > 0) times[index - 1].arrival_epoch_sec = priorDeparture - points[index - 1].stay_duration_sec;
+  }
+  for (let index = 1; index < points.length - 1; index += 1) {
+    times[index].departure_epoch_sec = times[index].arrival_epoch_sec + points[index].stay_duration_sec;
+  }
+  times[points.length - 1].arrival_epoch_sec += itineraryFinite(reserveSec, '予備時間');
+  if (anchorIndex === points.length - 1) {
+    times[points.length - 1].arrival_epoch_sec = anchor.epoch_sec;
+    let arrival = anchor.epoch_sec - itineraryFinite(reserveSec, '予備時間');
+    for (let index = points.length - 1; index > 0; index -= 1) {
+      const priorDeparture = arrival - legs[index - 1].travel_time_sec;
+      times[index - 1].departure_epoch_sec = priorDeparture;
+      if (index - 1 > 0) {
+        times[index - 1].arrival_epoch_sec = priorDeparture - points[index - 1].stay_duration_sec;
+        times[index - 1].departure_epoch_sec = priorDeparture;
+        arrival = times[index - 1].arrival_epoch_sec;
+      }
+    }
+  }
+  return {
+    points: points.map((point, index) => ({ ...point, ...times[index] })), legs,
+    total_distance_km: cumulative,
+    planned_event_time_sec: points.reduce((sum, point) => sum + point.stay_duration_sec, 0),
+    moving_time_sec: previous.moving_time_sec,
+    natural_stop_time_sec: previous.natural_stop_time_sec,
+    departure_epoch_sec: times[0].departure_epoch_sec,
+    arrival_epoch_sec: times[points.length - 1].arrival_epoch_sec,
+  };
+}
+
 const SIMPLE_MODEL_ID = 'simple-origin-linear-v2';
 const SIMPLE_SETTINGS_KEY = 'ride-planning-lab-simple-model-settings-v2';
 const LEGACY_SIMPLE_SETTINGS_KEY = 'ride-planning-lab-simple-model-settings-v1';
@@ -1467,6 +1591,17 @@ function savePredictionModel(value, storage = globalThis.localStorage) {
 let ridePlanUi;
 let predictionModel = loadPredictionModel();
 let simpleSettings = loadSimpleSettings();
+let inputMode = 'simple';
+const pointUuid = () => globalThis.crypto.randomUUID();
+let itineraryState = {
+  points: [
+    { point_id: pointUuid(), name: '', leg_distance_km: 0, stay_duration_sec: 0 },
+    { point_id: pointUuid(), name: '', leg_distance_km: 140, stay_duration_sec: 0 },
+  ],
+  anchor: { point_id: null, kind: 'departure', epoch_sec: epoch('08:00') },
+};
+let lastItineraryAggregate = null;
+itineraryState.anchor.point_id = itineraryState.points[0].point_id;
 
 function selectedModelIsSimple() {
   return predictionModel === 'simple';
@@ -1541,6 +1676,101 @@ function destinationCalculation(result, distance, departureEpoch, events, reserv
       },
     },
   };
+}
+
+function basePrediction(distance) {
+  const input = { distance_km: distance, departure_epoch_sec: 0,
+    event_minutes: [], unexpected_buffer_minutes: 0 };
+  const result = selectedModelIsSimple()
+    ? estimateSimpleDestination(input, simpleSettings)
+    : estimateDestination(input, getArtifact());
+  return { moving_time_sec: result.moving_time_sec,
+    natural_stop_time_sec: result.natural_stop_time_sec };
+}
+
+function itineraryEvents(points) {
+  return points.slice(1, -1).map((point, index) => ({
+    event_code: point.point_id, event_type: 'other', role: index === 0 ? 'primary' : 'secondary',
+    display_name: point.name.trim() || `ポイント${index + 1}`, route_order: index,
+    planned_duration_sec: point.stay_duration_sec,
+  }));
+}
+
+function itinerarySnapshot(result, aggregate, reserveMinutes) {
+  const events = itineraryEvents(aggregate.points);
+  const context = destinationCalculation(result, aggregate.total_distance_km,
+    aggregate.departure_epoch_sec, events.map(event => ({ ...event, minutes: event.planned_duration_sec / 60 })), reserveMinutes);
+  context.calculation.input.itinerary = {
+    mode: 'itinerary', anchor: { ...itineraryState.anchor },
+    points: aggregate.points.map(point => ({ ...point })),
+    legs: aggregate.legs.map(leg => ({ ...leg })),
+  };
+  return context;
+}
+
+function renderItinerary(aggregate = null) {
+  const root = document.querySelector('#itinerary-points');
+  root.innerHTML = itineraryState.points.map((point, index) => {
+    const middle = index > 0 && index < itineraryState.points.length - 1;
+    const calculated = aggregate?.points[index];
+    const anchor = itineraryState.anchor.point_id === point.point_id;
+    const arrival = index > 0 ? `<label>到着時刻 <span>${anchor ? '指定' : '予測'}</span>${middle || index === itineraryState.points.length - 1 ? `<input type="time" data-point-time="arrival" data-point-id="${point.point_id}" value="${calculated ? timeValue(calculated.arrival_epoch_sec) : ''}">${calculated ? `<small>${clockText(calculated.arrival_epoch_sec, aggregate.departure_epoch_sec)}</small>` : ''}` : ''}</label>` : '';
+    const departure = index === 0
+      ? `<label>出発時刻 <span>${anchor ? '指定' : '予測'}</span><input type="time" data-point-time="departure" data-point-id="${point.point_id}" value="${calculated ? timeValue(calculated.departure_epoch_sec) : timeValue(itineraryState.anchor.epoch_sec)}"></label>`
+      : middle ? `<label>出発時刻 <span>予測</span><div class="itinerary-clock">${calculated ? clockText(calculated.departure_epoch_sec, aggregate.departure_epoch_sec) : '—'}</div></label>` : '';
+    return `<article class="itinerary-point" data-point-id="${point.point_id}"><header><strong>${escapeHtml(pointLabel(point, index, itineraryState.points.length))}</strong>${middle ? `<button type="button" class="itinerary-remove" data-remove-point="${point.point_id}">削除</button>` : ''}</header>
+      ${index ? `<div class="itinerary-leg"><label>前のポイントからの区間距離（km）<input type="number" min="0" max="500" step="0.1" inputmode="decimal" data-point-field="leg_distance_km" value="${point.leg_distance_km ?? ''}"></label><span>↓</span></div>` : ''}
+      ${middle ? `<label>名称（任意）<input maxlength="60" data-point-field="name" value="${escapeHtml(point.name)}" placeholder="ポイント${index}"></label>` : ''}
+      <div class="itinerary-times">${arrival}${middle ? `<label>滞在時間（分）<input type="number" min="0" step="1" inputmode="numeric" data-point-field="stay_minutes" value="${point.stay_duration_sec / 60}"></label>` : ''}${departure}</div></article>`;
+  }).join('');
+  document.querySelector('#add-itinerary-point').disabled = itineraryState.points.length >= MAX_ITINERARY_POINTS;
+}
+
+function recalculateItinerary() {
+  const status = document.querySelector('#itinerary-status');
+  currentCalculations.destination = null;
+  try {
+    const reserveMinutes = unexpectedMinutes(document.querySelector('#itinerary-form'));
+    const aggregate = calculateItinerary(itineraryState.points, itineraryState.anchor,
+      basePrediction, reserveMinutes * 60);
+    lastItineraryAggregate = aggregate;
+    const events = itineraryEvents(aggregate.points);
+    const predictionInput = { distance_km: aggregate.total_distance_km,
+      departure_epoch_sec: aggregate.departure_epoch_sec,
+      event_minutes: events.map(event => event.planned_duration_sec / 60),
+      unexpected_buffer_minutes: reserveMinutes };
+    const result = selectedModelIsSimple()
+      ? estimateSimpleDestination(predictionInput, simpleSettings)
+      : estimateDestination(predictionInput, getArtifact());
+    currentCalculations.destination = itinerarySnapshot(result, aggregate, reserveMinutes);
+    document.querySelector('#itinerary-total-distance').textContent = `${aggregate.total_distance_km.toFixed(1)} km`;
+    document.querySelector('#itinerary-total-planned').textContent = `${Math.round(aggregate.planned_event_time_sec / 60)}分`;
+    status.textContent = '';
+    renderItinerary(aggregate);
+    revealCalculation(document.querySelector('#destination-result'), renderDestinationResult(result, {
+      departure_time: clockText(aggregate.departure_epoch_sec, aggregate.departure_epoch_sec),
+      epoch: aggregate.departure_epoch_sec,
+    }), 'destination');
+  } catch (error) {
+    lastItineraryAggregate = null;
+    renderItinerary();
+    document.querySelector('#itinerary-total-distance').textContent = '—';
+    document.querySelector('#itinerary-total-planned').textContent = '—';
+    status.textContent = `入力を完成すると計算できます: ${error.message}`;
+    document.querySelector('#destination-result').innerHTML = '';
+    ridePlanUi?.refreshSaveControls();
+  }
+}
+
+function setInputMode(mode) {
+  inputMode = mode === 'itinerary' ? 'itinerary' : 'simple';
+  document.querySelector('#simple-input-panel').classList.toggle('hidden', inputMode !== 'simple');
+  document.querySelector('#itinerary-input-panel').classList.toggle('hidden', inputMode !== 'itinerary');
+  document.querySelectorAll('[data-input-mode]').forEach(button => button.classList.toggle('active', button.dataset.inputMode === inputMode));
+  document.querySelector('#destination-result').innerHTML = '';
+  currentCalculations.destination = null;
+  if (inputMode === 'itinerary') recalculateItinerary();
+  ridePlanUi?.refreshSaveControls();
 }
 
 function distanceCalculation(result, departureEpoch, deadlineEpoch, events, reserveMinutes) {
@@ -1640,8 +1870,59 @@ document.querySelector('#distance-form').addEventListener('submit', event => {
   }
 });
 
+document.querySelectorAll('[data-input-mode]').forEach(button => {
+  button.addEventListener('click', () => setInputMode(button.dataset.inputMode));
+});
+document.querySelector('#add-itinerary-point').addEventListener('click', () => {
+  if (itineraryState.points.length >= MAX_ITINERARY_POINTS) return;
+  itineraryState.points.splice(-1, 0, {
+    point_id: pointUuid(), name: '', leg_distance_km: '', stay_duration_sec: 0,
+  });
+  recalculateItinerary();
+});
+document.querySelector('#itinerary-points').addEventListener('click', event => {
+  const button = event.target.closest('[data-remove-point]');
+  if (!button) return;
+  const removed = itineraryState.points.findIndex(point => point.point_id === button.dataset.removePoint);
+  if (removed <= 0 || removed >= itineraryState.points.length - 1) return;
+  if (itineraryState.anchor.point_id === button.dataset.removePoint) {
+    itineraryState.anchor = { point_id: itineraryState.points[0].point_id,
+      kind: 'departure', epoch_sec: itineraryState.anchor.epoch_sec };
+  }
+  itineraryState.points.splice(removed, 1);
+  recalculateItinerary();
+});
+document.querySelector('#itinerary-form').addEventListener('change', event => {
+  const card = event.target.closest('[data-point-id]');
+  if (card && event.target.dataset.pointField) {
+    const point = itineraryState.points.find(item => item.point_id === card.dataset.pointId);
+    const field = event.target.dataset.pointField;
+    if (field === 'name') point.name = event.target.value;
+    else if (field === 'stay_minutes') point.stay_duration_sec = event.target.value === '' ? '' : Number(event.target.value) * 60;
+    else point[field] = event.target.value === '' ? '' : Number(event.target.value);
+  }
+  if (event.target.dataset.pointTime) {
+    const point = lastItineraryAggregate?.points.find(item => item.point_id === event.target.dataset.pointId);
+    const reference = point?.[`${event.target.dataset.pointTime}_epoch_sec`]
+      ?? itineraryState.anchor.epoch_sec;
+    itineraryState.anchor = { point_id: event.target.dataset.pointId,
+      kind: event.target.dataset.pointTime,
+      epoch_sec: epochForEditedClock(event.target.value, reference) };
+  }
+  recalculateItinerary();
+});
+document.addEventListener('rideplanning:load-itinerary', event => {
+  const saved = event.detail;
+  itineraryState = {
+    points: saved.points.map(point => ({ ...point })),
+    anchor: { ...saved.anchor },
+  };
+  setInputMode('itinerary');
+});
+
 initializeInputs(getArtifact);
 ridePlanUi = initializeSnapshotUi(currentCalculations, reproduction, setSnapshotNameDraft);
+renderItinerary();
 initializeUpdateManager();
 const recalculateQuickReturn = initializeQuickReturn({
   model: () => predictionModel,
@@ -1681,6 +1962,7 @@ function applyPredictionModel(value) {
     : '現行モデルを使用します。';
   clearResults();
   recalculateQuickReturn();
+  if (inputMode === 'itinerary') recalculateItinerary();
 }
 
 applyPredictionModel(predictionModel);
@@ -1707,6 +1989,7 @@ settingsForm.addEventListener('input', () => {
     clearResults();
     drawModelGraph();
     recalculateQuickReturn();
+    if (inputMode === 'itinerary') recalculateItinerary();
   } catch (error) {
     status.textContent = error.message;
   }
@@ -1719,6 +2002,7 @@ document.querySelector('#reset-simple-settings').addEventListener('click', () =>
   clearResults();
   drawModelGraph();
   recalculateQuickReturn();
+  if (inputMode === 'itinerary') recalculateItinerary();
 });
 
 document.addEventListener('rideplanning:load-model', event => {

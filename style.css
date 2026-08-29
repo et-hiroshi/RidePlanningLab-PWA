@@ -89,6 +89,17 @@ main {
   border-radius:10px;
   background:#fff
 }
+.input-mode-selector{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:0 0 10px}
+.input-mode-selector button{min-height:44px;border:1px solid var(--brand);border-radius:9px;background:#fff;color:var(--brand);font-weight:700}
+.input-mode-selector button.active{background:var(--brand);color:#fff}
+.itinerary-point{padding:12px;margin:0 0 10px;border:1px solid var(--line);border-radius:12px;background:#fbfdfb}
+.itinerary-point header{display:flex;flex-direction:row;align-items:center;justify-content:space-between;padding:0;background:transparent;color:var(--ink)}
+.itinerary-point header strong{font-size:1rem}.itinerary-point header small{padding:2px 7px;border-radius:999px;background:var(--soft);color:var(--brand)}
+.itinerary-leg{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end;margin:8px 0;padding:9px;border-left:4px solid var(--moving);background:#f3f7fc}
+.itinerary-leg label{margin:0}.itinerary-times{display:grid;grid-template-columns:1fr 1fr;gap:10px}.itinerary-times label{margin:0}
+.itinerary-clock{min-height:48px;padding:10px;border:1px solid var(--line);border-radius:9px;background:#fff;font-weight:700}
+.itinerary-summary{display:flex;justify-content:space-between;gap:10px;margin:12px 0;padding:12px;border-radius:10px;background:var(--soft)}
+.itinerary-remove{border:0;background:transparent;color:#9b1c1c;font-weight:700}
 .model-selector label {
   margin:0
 }

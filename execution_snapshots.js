@@ -1,5 +1,6 @@
-export const APP_VERSION='ride-planning-ui-v30';
+export const APP_VERSION='ride-planning-ui-v31';
 export const SNAPSHOT_SCHEMA_VERSION='ride-plan-execution-snapshot-v1';
+export const ITINERARY_SNAPSHOT_SCHEMA_VERSION='ride-plan-execution-snapshot-v2';
 export const SNAPSHOT_RECORD_TYPE='ride_plan_execution_snapshot';
 export const SNAPSHOT_STORE_SCHEMA_VERSION='ride-plan-execution-snapshot-store-v1';
 export const SNAPSHOT_STORAGE_KEY='ride-planning-lab-execution-snapshots-v1';
@@ -29,7 +30,7 @@ function validatePredictionModel(input,reproduction){
 }
 export function validateExecutionSnapshot(record){
   if(!record||typeof record!=='object'||Array.isArray(record))throw new Error('Snapshotレコードが不正です。');
-  if(record.schema_version!==SNAPSHOT_SCHEMA_VERSION||record.record_type!==SNAPSHOT_RECORD_TYPE)throw new Error('未対応のSnapshot形式です。');
+  if(![SNAPSHOT_SCHEMA_VERSION,ITINERARY_SNAPSHOT_SCHEMA_VERSION].includes(record.schema_version)||record.record_type!==SNAPSHOT_RECORD_TYPE)throw new Error('未対応のSnapshot形式です。');
   if(!uuidPattern.test(record.execution_snapshot_id||''))throw new Error('Snapshot IDが不正です。');
   if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(record.created_at||'')||!Number.isFinite(Date.parse(record.created_at)))throw new Error('作成日時が不正です。');
   if(record.display_name!==undefined&&(typeof record.display_name!=='string'||!record.display_name.trim()||record.display_name.length>80))throw new Error('計画名が不正です。');
@@ -46,6 +47,20 @@ export function validateExecutionSnapshot(record){
     ['return_deadline_epoch_sec','available_time_sec'].forEach(key=>requireNonnegative(input[key],key));
     ['standard_distance_km','lower_distance_km','upper_distance_km'].forEach(key=>requireNonnegative(result[key],key));
   }
+  const itinerary=input.itinerary;
+  if(record.schema_version===ITINERARY_SNAPSHOT_SCHEMA_VERSION){
+    if(calculation.mode!=='distance_to_time'||itinerary?.mode!=='itinerary'||!Array.isArray(itinerary.points)||itinerary.points.length<2||itinerary.points.length>20)throw new Error('行程情報が不正です。');
+    const ids=new Set();
+    itinerary.points.forEach((point,index)=>{if(typeof point?.point_id!=='string'||!point.point_id||ids.has(point.point_id)||typeof point.name!=='string'||point.name.length>60)throw new Error('行程ポイントが不正です。');ids.add(point.point_id);requireNonnegative(point.leg_distance_km,'区間距離');requireNonnegative(point.stay_duration_sec,'滞在時間');if(index===0&&point.leg_distance_km!==0)throw new Error('行程の出発距離が不正です。');['arrival_epoch_sec','departure_epoch_sec'].forEach(key=>{if(point[key]!==undefined)requireNonnegative(point[key],key)})});
+    if(!itinerary.anchor||!ids.has(itinerary.anchor.point_id)||!['departure','arrival'].includes(itinerary.anchor.kind))throw new Error('行程anchorが不正です。');
+    requireNonnegative(itinerary.anchor.epoch_sec,'anchor時刻');
+    const anchorIndex=itinerary.points.findIndex(point=>point.point_id===itinerary.anchor.point_id);
+    if((anchorIndex===0)!==(itinerary.anchor.kind==='departure'))throw new Error('行程anchor種別が不正です。');
+    if(!Array.isArray(itinerary.legs)||itinerary.legs.length!==itinerary.points.length-1)throw new Error('行程区間が不正です。');
+    itinerary.legs.forEach((leg,index)=>{['distance_km','moving_time_sec','natural_stop_time_sec','travel_time_sec'].forEach(key=>requireNonnegative(leg?.[key],`区間 ${key}`));if(leg.from_point_id!==itinerary.points[index].point_id||leg.to_point_id!==itinerary.points[index+1].point_id||Math.abs(leg.distance_km-itinerary.points[index+1].leg_distance_km)>1e-6||Math.abs(leg.travel_time_sec-leg.moving_time_sec-leg.natural_stop_time_sec)>1e-6)throw new Error('行程区間の整合性が不正です。')});
+    const sum=key=>itinerary.legs.reduce((total,leg)=>total+leg[key],0),stay=itinerary.points.reduce((total,point)=>total+point.stay_duration_sec,0),eventTotal=input.planned_events.reduce((total,event)=>total+event.planned_duration_sec,0);
+    if(Math.abs(sum('distance_km')-input.distance_km)>1e-6||Math.abs(sum('moving_time_sec')-result.moving_time_sec)>1e-6||Math.abs(sum('natural_stop_time_sec')-result.natural_stop_time_sec)>1e-6||Math.abs(stay-eventTotal)>1e-6||Math.abs(stay-result.planned_event_time_sec)>1e-6)throw new Error('行程集約値の整合性が不正です。');
+  }else if(itinerary!==undefined){throw new Error('Snapshot v1に行程情報は保存できません。');}
   const reproduction=record.reproduction;
   for(const key of ['app_version','runtime_artifact_id','runtime_artifact_sha256','teacher_version','calculation_contract_version'])if(typeof reproduction?.[key]!=='string'||!reproduction[key])throw new Error(`再現情報 ${key} が不正です。`);
   if(!/^[0-9a-f]{64}$/.test(reproduction.runtime_artifact_sha256))throw new Error('Runtime artifact hashが不正です。');
@@ -68,7 +83,7 @@ function newUuid(cryptoObject=globalThis.crypto){
 }
 export function createExecutionSnapshot(payload,{now=()=>new Date(),cryptoObject=globalThis.crypto}={}){
   const created=now(),name=String(payload.display_name||'').trim();
-  const record={schema_version:SNAPSHOT_SCHEMA_VERSION,record_type:SNAPSHOT_RECORD_TYPE,execution_snapshot_id:newUuid(cryptoObject),created_at:created.toISOString(),calculation:clone(payload.calculation),reproduction:clone(payload.reproduction)};
+  const record={schema_version:payload.calculation?.input?.itinerary?ITINERARY_SNAPSHOT_SCHEMA_VERSION:SNAPSHOT_SCHEMA_VERSION,record_type:SNAPSHOT_RECORD_TYPE,execution_snapshot_id:newUuid(cryptoObject),created_at:created.toISOString(),calculation:clone(payload.calculation),reproduction:clone(payload.reproduction)};
   if(name)record.display_name=name;
   validateExecutionSnapshot(record);return record;
 }
