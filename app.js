@@ -1,5 +1,5 @@
-import {RUNTIME_VERSION, estimateDestination, estimateDistance, validateArtifact} from './runtime/ride_planning_runtime.js?v=ride-planning-ui-v29';
-import {APP_VERSION, CALCULATION_CONTRACT_VERSION, appendExecutionSnapshot, createExecutionSnapshot, deleteAllExecutionSnapshots, deleteExecutionSnapshot, executionSnapshotsFilename, executionSnapshotsJsonl, loadExecutionSnapshots, sameExecutionSnapshotContent} from './execution_snapshots.js?v=ride-planning-ui-v29';
+import {ARTIFACT_SCHEMA_VERSION, RUNTIME_VERSION, estimateDestination, estimateDistance, validateArtifact} from './runtime/ride_planning_runtime.js?v=ride-planning-ui-v30';
+import {APP_VERSION, CALCULATION_CONTRACT_VERSION, appendExecutionSnapshot, createExecutionSnapshot, deleteAllExecutionSnapshots, deleteExecutionSnapshot, executionSnapshotsFilename, executionSnapshotsJsonl, loadExecutionSnapshots, sameExecutionSnapshotContent} from './execution_snapshots.js?v=ride-planning-ui-v30';
 
 const presets = [
   ['collection', 'カード収集', 10, true],
@@ -790,6 +790,8 @@ let artifact;
 let artifactSha256;
 let buildInfo;
 let serviceWorkerRegistration;
+let rawArtifact;
+let artifactUrl;
 
 function getArtifact() {
   return artifact;
@@ -813,6 +815,18 @@ const setText = (selector, value) => {
 };
 
 const short = value => value && value !== 'unknown' ? value.slice(0, 12) : '取得不可';
+
+function renderArtifactDiagnostic(status, raw = rawArtifact, digest = artifactSha256) {
+  setText('#artifact-validation-status', status);
+  setText('#diagnostic-runtime-expected', RUNTIME_VERSION);
+  setText('#diagnostic-schema-expected', ARTIFACT_SCHEMA_VERSION);
+  setText('#diagnostic-artifact-runtime', raw?.runtime_version || '取得不可');
+  setText('#diagnostic-artifact-schema', raw?.schema_version || '取得不可');
+  setText('#diagnostic-artifact-product', raw?.product_identity || '取得不可');
+  setText('#diagnostic-artifact-prototype', raw?.prototype_status || '取得不可');
+  setText('#diagnostic-artifact-url', artifactUrl || '取得不可');
+  setText('#artifact-sha', digest ? short(digest) : '取得不可');
+}
 
 const runtimeGeneration = value => {
   const match = String(value || '').match(/runtime-v(\d+)(?:$|[.-])/);
@@ -976,26 +990,28 @@ async function refreshAssets() {
 
 async function loadArtifact() {
   setText('#runtime-version', RUNTIME_VERSION);
+  artifactUrl = new URL('./artifacts/ride_planning_runtime_v1.json', document.baseURI).href;
+  renderArtifactDiagnostic('取得中');
   try {
     const response = await fetchWithin('./artifacts/ride_planning_runtime_v1.json', '予測データ');
+    artifactUrl = response.url || artifactUrl;
     if (!response.ok) throw new Error(`予測データ取得失敗 (${response.status})`);
     const bytes = await withTimeout(response.arrayBuffer(), 3000, '予測データ読込');
-    artifact = validateArtifact(JSON.parse(new TextDecoder().decode(bytes)));
-    updateAllSubmitStates();
-    window.dispatchEvent(new Event('rideplanning:artifact-ready'));
+    rawArtifact = JSON.parse(new TextDecoder().decode(bytes));
     try {
-      const digest = await sha256(bytes);
-      artifactSha256 = digest;
-      setText('#artifact-sha', short(digest));
-      return digest;
+      artifactSha256 = await sha256(bytes);
     } catch (error) {
       artifactSha256 = undefined;
-      setText('#artifact-sha', error.message.includes('非対応') ? '非対応' : '取得失敗');
-      return null;
     }
+    renderArtifactDiagnostic('検証中');
+    artifact = validateArtifact(rawArtifact);
+    renderArtifactDiagnostic('一致');
+    updateAllSubmitStates();
+    window.dispatchEvent(new Event('rideplanning:artifact-ready'));
+    return artifactSha256 || null;
   } catch (error) {
     artifact = undefined;
-    setText('#artifact-sha', '取得失敗');
+    renderArtifactDiagnostic('不一致');
     updateAllSubmitStates();
     const node = document.querySelector('#fatal');
     const diagnostic = error.compatibilityDiagnostic;
@@ -1005,6 +1021,9 @@ async function loadArtifact() {
       : '';
     node.textContent = `${error.message}${detail} 初回利用またはcache消去後は、通信可能な状態で開き直してください。`;
     node.classList.remove('hidden');
+    window.dispatchEvent(new CustomEvent('rideplanning:artifact-failed', {
+      detail: { message: error.message, compatibilityDiagnostic: diagnostic || null },
+    }));
     return null;
   }
 }
@@ -1360,14 +1379,26 @@ function initializeQuickReturn({ now = () => new Date(), storage = globalThis.lo
   const update = () => {
     try {
       if (!form.checkValidity()) throw new Error('残距離と時間を確認してください。');
+      const selectedModel = model();
+      const currentArtifact = artifact();
+      if (selectedModel === 'current' && currentArtifact === undefined) {
+        arrival.textContent = '—';
+        earlyArrival.textContent = '—';
+        lateArrival.textContent = '—';
+        remaining.textContent = '残り時間を計算中';
+        calculatedAt.textContent = '計算時刻 —';
+        error.textContent = '';
+        error.classList.add('hidden');
+        return;
+      }
       const calculationTime = now();
       const result = estimateQuickReturn(
         distance.value,
         buffer.value,
         calculationTime,
-        model(),
+        selectedModel,
         settings(),
-        artifact(),
+        currentArtifact,
       );
       try {
         storage?.setItem(QUICK_RETURN_DISTANCE_KEY, distance.value);
@@ -1394,6 +1425,16 @@ function initializeQuickReturn({ now = () => new Date(), storage = globalThis.lo
   form.addEventListener('change', update);
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') update();
+  });
+  window.addEventListener('rideplanning:artifact-ready', update);
+  window.addEventListener('rideplanning:artifact-failed', event => {
+    arrival.textContent = '—';
+    earlyArrival.textContent = '—';
+    lateArrival.textContent = '—';
+    remaining.textContent = '残り時間を計算できません';
+    calculatedAt.textContent = '計算時刻 —';
+    error.textContent = event.detail?.message || '予測データを利用できません。';
+    error.classList.remove('hidden');
   });
   update();
   return update;

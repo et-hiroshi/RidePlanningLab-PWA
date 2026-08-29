@@ -1,5 +1,6 @@
 export const RUNTIME_VERSION = 'mobile-ride-planning-practical-runtime-v7';
 const SCHEMA = 'mobile-ride-planning-runtime-artifact-v5';
+export const ARTIFACT_SCHEMA_VERSION = SCHEMA;
 
 function finite(value, name, allowZero = true) {
   if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || (!allowZero && value === 0)) {
