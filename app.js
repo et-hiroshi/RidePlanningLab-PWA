@@ -1,5 +1,5 @@
-import {ARTIFACT_SCHEMA_VERSION, RUNTIME_VERSION, estimateDestination, estimateDistance, validateArtifact} from './runtime/ride_planning_runtime.js?v=ride-planning-ui-v32';
-import {APP_VERSION, CALCULATION_CONTRACT_VERSION, appendExecutionSnapshot, createExecutionSnapshot, deleteAllExecutionSnapshots, deleteExecutionSnapshot, executionSnapshotsFilename, executionSnapshotsJsonl, loadExecutionSnapshots, sameExecutionSnapshotContent} from './execution_snapshots.js?v=ride-planning-ui-v32';
+import {ARTIFACT_SCHEMA_VERSION, RUNTIME_VERSION, estimateDestination, estimateDistance, validateArtifact} from './runtime/ride_planning_runtime.js?v=ride-planning-ui-v33';
+import {APP_VERSION, CALCULATION_CONTRACT_VERSION, appendExecutionSnapshot, createExecutionSnapshot, deleteAllExecutionSnapshots, deleteExecutionSnapshot, executionSnapshotsFilename, executionSnapshotsJsonl, loadExecutionSnapshots, sameExecutionSnapshotContent} from './execution_snapshots.js?v=ride-planning-ui-v33';
 
 const presets = [
   ['collection', 'カード収集', 10, true],
@@ -604,16 +604,17 @@ function openPlan(record, plan, setSnapshotNameDraft) {
     simple_model_parameters: input.simple_model_parameters,
   } }));
   const destination = record.calculation.mode === 'distance_to_time';
-  const mode = destination ? 'destination' : 'distance';
+  const mode = input.itinerary ? 'itinerary' : destination ? 'destination' : 'distance';
   document.querySelector(`[data-mode=${mode}]`).click();
   const form = document.querySelector(`#${mode}-form`);
   if (input.itinerary) {
-    setSnapshotNameDraft(mode, plan.title);
-    document.dispatchEvent(new CustomEvent('rideplanning:load-itinerary', { detail: input.itinerary }));
+    setSnapshotNameDraft('destination', plan.title);
+    document.dispatchEvent(new CustomEvent('rideplanning:load-itinerary', { detail: {
+      itinerary: input.itinerary, reserve_time_sec: input.reserve_time_sec,
+    } }));
     form.scrollIntoView({ behavior: 'smooth', block: 'start' });
     return;
   }
-  if (destination) document.querySelector('[data-input-mode=simple]').click();
   form.elements.departure_time.value = snapshotClock(input.departure_epoch_sec);
   if (destination) form.elements.distance_km.value = input.distance_km;
   else form.elements.deadline_time.value = snapshotClock(input.return_deadline_epoch_sec);
@@ -1717,16 +1718,19 @@ function pickerOptions(start, end, selected, format = value => String(value)) {
 
 function distancePicker(point) {
   const value = Number(point.leg_distance_km || 0);
-  const whole = Math.min(500, Math.floor(value));
-  const tenth = whole === 500 ? 0 : Math.round((value - whole) * 10);
-  return `<div class="itinerary-picker distance-picker"><select data-point-field="distance_whole" data-target-point-id="${point.point_id}" aria-label="区間距離 km">${pickerOptions(0, 500, whole, item => `${item} km`)}</select><select data-point-field="distance_tenth" data-target-point-id="${point.point_id}" aria-label="区間距離 小数">${pickerOptions(0, 9, tenth, item => `.${item}`)}</select></div>`;
+  const legacy = Number.isInteger(value) ? ''
+    : `<option value="${value}" selected>${value} km（保存値）</option>`;
+  return `<select class="itinerary-picker distance-picker" data-point-field="leg_distance_km" data-target-point-id="${point.point_id}" aria-label="区間距離 km">${legacy}${pickerOptions(0, 500, value, item => `${item} km`)}</select>`;
 }
 
 function stayPicker(point) {
-  const minutes = Math.max(0, Math.round(Number(point.stay_duration_sec || 0) / 60));
-  const hours = Math.min(24, Math.floor(minutes / 60));
-  const remainder = hours === 24 ? 0 : minutes % 60;
-  return `<div class="itinerary-picker stay-picker"><select data-point-field="stay_hours" aria-label="滞在時間 時間">${pickerOptions(0, 24, hours, item => `${item}時間`)}</select><select data-point-field="stay_minutes" aria-label="滞在時間 分">${pickerOptions(0, 59, remainder, item => `${item}分`)}</select></div>`;
+  const seconds = Number(point.stay_duration_sec || 0);
+  const standard = seconds % 300 === 0 && seconds >= 0 && seconds <= 7200;
+  const legacy = standard ? ''
+    : `<option value="${seconds}" selected>${seconds / 60}分（保存値）</option>`;
+  const options = Array.from({ length: 25 }, (_, index) => index * 300)
+    .map(value => `<option value="${value}"${value === seconds ? ' selected' : ''}>${value / 60}分</option>`).join('');
+  return `<select class="itinerary-picker stay-picker" data-point-field="stay_duration_sec" aria-label="滞在時間 分">${legacy}${options}</select>`;
 }
 
 function eventTypePicker(point) {
@@ -1754,7 +1758,9 @@ function renderItinerary(aggregate = null) {
     const nextPoint = itineraryState.points[index + 1];
     const anchor = itineraryState.anchor.point_id === point.point_id;
     const anchorMark = anchor ? '<small class="anchor-mark">指定</small>' : '';
-    const arrival = index > 0 ? `<label>到着時刻 ${anchorMark}<input type="time" data-point-time="arrival" data-point-id="${point.point_id}" value="${calculated ? timeValue(calculated.arrival_epoch_sec) : ''}">${calculated ? `<small>${clockText(calculated.arrival_epoch_sec, aggregate.departure_epoch_sec)}</small>` : ''}</label>` : '';
+    const arrivalClock = calculated ? clockText(calculated.arrival_epoch_sec, aggregate.departure_epoch_sec) : '';
+    const dayOffset = arrivalClock.replace(/\d{2}:\d{2}$/, '').trim();
+    const arrival = index > 0 ? `<label>到着時刻 ${anchorMark}<input type="time" data-point-time="arrival" data-point-id="${point.point_id}" value="${calculated ? timeValue(calculated.arrival_epoch_sec) : ''}">${dayOffset ? `<small class="day-offset">${dayOffset}</small>` : ''}</label>` : '';
     const departure = index === 0
       ? `<label>出発時刻 ${anchorMark}<input type="time" data-point-time="departure" data-point-id="${point.point_id}" value="${calculated ? timeValue(calculated.departure_epoch_sec) : timeValue(itineraryState.anchor.epoch_sec)}"></label>`
       : middle ? `<label>出発時刻<div class="itinerary-clock">${calculated ? clockText(calculated.departure_epoch_sec, aggregate.departure_epoch_sec) : '—'}</div></label>` : '';
@@ -1803,9 +1809,6 @@ function recalculateItinerary(shouldReveal = false) {
 
 function setInputMode(mode) {
   inputMode = mode === 'itinerary' ? 'itinerary' : 'simple';
-  document.querySelector('#simple-input-panel').classList.toggle('hidden', inputMode !== 'simple');
-  document.querySelector('#itinerary-input-panel').classList.toggle('hidden', inputMode !== 'itinerary');
-  document.querySelectorAll('[data-input-mode]').forEach(button => button.classList.toggle('active', button.dataset.inputMode === inputMode));
   document.querySelector('#destination-result').innerHTML = '';
   currentCalculations.destination = null;
   if (inputMode === 'itinerary') recalculateItinerary();
@@ -1909,9 +1912,6 @@ document.querySelector('#distance-form').addEventListener('submit', event => {
   }
 });
 
-document.querySelectorAll('[data-input-mode]').forEach(button => {
-  button.addEventListener('click', () => setInputMode(button.dataset.inputMode));
-});
 document.querySelector('#add-itinerary-point').addEventListener('click', () => {
   if (itineraryState.points.length >= MAX_ITINERARY_POINTS) return;
   itineraryState.points.splice(-1, 0, {
@@ -1938,16 +1938,8 @@ document.querySelector('#itinerary-form').addEventListener('change', event => {
     const field = event.target.dataset.pointField;
     if (field === 'name') point.name = event.target.value;
     else if (field === 'planned_event_code') point.planned_event_code = event.target.value || null;
-    else if (field === 'distance_whole' || field === 'distance_tenth') {
-      const picker = event.target.closest('.distance-picker');
-      const whole = Number(picker.querySelector('[data-point-field=distance_whole]').value);
-      const tenth = whole === 500 ? 0 : Number(picker.querySelector('[data-point-field=distance_tenth]').value);
-      point.leg_distance_km = whole + tenth / 10;
-    } else if (field === 'stay_hours' || field === 'stay_minutes') {
-      const hours = Number(card.querySelector('[data-point-field=stay_hours]').value);
-      const minutes = hours === 24 ? 0 : Number(card.querySelector('[data-point-field=stay_minutes]').value);
-      point.stay_duration_sec = (hours * 60 + minutes) * 60;
-    }
+    else if (field === 'leg_distance_km') point.leg_distance_km = Number(event.target.value);
+    else if (field === 'stay_duration_sec') point.stay_duration_sec = Number(event.target.value);
     else point[field] = event.target.value === '' ? '' : Number(event.target.value);
   }
   if (event.target.dataset.pointTime) {
@@ -1966,11 +1958,16 @@ document.querySelector('#itinerary-form').addEventListener('submit', event => {
   recalculateItinerary(true);
 });
 document.addEventListener('rideplanning:load-itinerary', event => {
-  const saved = event.detail;
+  const saved = event.detail.itinerary || event.detail;
   itineraryState = {
     points: saved.points.map(point => ({ ...point })),
     anchor: { ...saved.anchor },
   };
+  if (event.detail.reserve_time_sec !== undefined) {
+    const form = document.querySelector('#itinerary-form');
+    form.elements.unexpected_enabled.checked = event.detail.reserve_time_sec > 0;
+    form.elements.unexpected_buffer_minutes.value = event.detail.reserve_time_sec / 60;
+  }
   setInputMode('itinerary');
 });
 
@@ -1985,9 +1982,11 @@ const recalculateQuickReturn = initializeQuickReturn({
 });
 
 function showSection(name) {
-  const calculation = name === 'destination' || name === 'distance';
+  const calculation = name === 'destination' || name === 'itinerary' || name === 'distance';
   document.querySelector('#calculator-section').classList.toggle('hidden', !calculation);
   document.querySelector('#destination-view').classList.toggle('hidden', name !== 'destination');
+  document.querySelector('#itinerary-view').classList.toggle('hidden', name !== 'itinerary');
+  document.querySelector('#destination-result').classList.toggle('hidden', !['destination', 'itinerary'].includes(name));
   document.querySelector('#distance-view').classList.toggle('hidden', name !== 'distance');
   ['quick-return', 'settings', 'graph'].forEach(section => {
     document.querySelector(`#${section}-section`).classList.toggle('hidden', section !== name);
@@ -1999,6 +1998,8 @@ function showSection(name) {
     button.classList.toggle('active', button.dataset.section === name);
   });
   if (name === 'quick-return') recalculateQuickReturn();
+  if (name === 'destination') setInputMode('simple');
+  if (name === 'itinerary') setInputMode('itinerary');
   if (name === 'graph') drawModelGraph();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
