@@ -1,5 +1,5 @@
-import {ARTIFACT_SCHEMA_VERSION, RUNTIME_VERSION, estimateDestination, estimateDistance, validateArtifact} from './runtime/ride_planning_runtime.js?v=ride-planning-ui-v36';
-import {APP_VERSION, CALCULATION_CONTRACT_VERSION, appendExecutionSnapshot, createExecutionSnapshot, deleteAllExecutionSnapshots, deleteExecutionSnapshot, executionSnapshotsFilename, executionSnapshotsJsonl, loadExecutionSnapshots, sameExecutionSnapshotContent} from './execution_snapshots.js?v=ride-planning-ui-v36';
+import {ARTIFACT_SCHEMA_VERSION, RUNTIME_VERSION, estimateDestination, estimateDistance, validateArtifact} from './runtime/ride_planning_runtime.js?v=ride-planning-ui-v37';
+import {APP_VERSION, CALCULATION_CONTRACT_VERSION, appendExecutionSnapshot, createExecutionSnapshot, deleteAllExecutionSnapshots, deleteExecutionSnapshot, executionSnapshotsFilename, executionSnapshotsJsonl, loadExecutionSnapshots, sameExecutionSnapshotContent} from './execution_snapshots.js?v=ride-planning-ui-v37';
 
 const presets = [
   ['collection', 'カード収集', 10, true],
@@ -1607,6 +1607,7 @@ let itineraryState = {
   anchor: { point_id: null, kind: 'departure', epoch_sec: epoch('08:00') },
 };
 let lastItineraryAggregate = null;
+let itineraryClockDraft = null;
 itineraryState.anchor.point_id = itineraryState.points[0].point_id;
 
 function selectedModelIsSimple() {
@@ -1781,7 +1782,42 @@ function renderItinerary(aggregate = null) {
   document.querySelector('#add-itinerary-point').disabled = itineraryState.points.length >= MAX_ITINERARY_POINTS;
 }
 
-function recalculateItinerary(shouldReveal = false) {
+function updateItineraryClocks(aggregate) {
+  aggregate.points.forEach((point, index) => {
+    const card = document.querySelector(`.itinerary-point[data-point-id="${point.point_id}"]`);
+    if (!card) return;
+    for (const kind of ['arrival', 'departure']) {
+      const input = card.querySelector(`[data-point-time="${kind}"]`);
+      if (!input) continue;
+      input.value = timeValue(point[`${kind}_epoch_sec`]);
+      const label = input.closest('label');
+      const selected = itineraryState.anchor.point_id === point.point_id
+        && itineraryState.anchor.kind === kind;
+      let mark = label.querySelector('.anchor-mark');
+      if (selected && !mark) {
+        mark = document.createElement('small');
+        mark.className = 'anchor-mark';
+        mark.textContent = '指定';
+        label.append(mark);
+      } else if (!selected) mark?.remove();
+      const clock = clockText(point[`${kind}_epoch_sec`], aggregate.departure_epoch_sec);
+      const offset = index === 0 && kind === 'departure'
+        ? '' : clock.replace(/\d{2}:\d{2}$/, '').trim();
+      let offsetNode = label.querySelector('.day-offset');
+      if (offset && !offsetNode) {
+        offsetNode = document.createElement('small');
+        offsetNode.className = 'day-offset';
+        label.append(offsetNode);
+      }
+      if (offsetNode) {
+        offsetNode.textContent = offset;
+        if (!offset) offsetNode.remove();
+      }
+    }
+  });
+}
+
+function recalculateItinerary(shouldReveal = false, preservePointDom = false) {
   const status = document.querySelector('#itinerary-status');
   currentCalculations.destination = null;
   try {
@@ -1801,7 +1837,8 @@ function recalculateItinerary(shouldReveal = false) {
     document.querySelector('#itinerary-total-distance').textContent = `${aggregate.total_distance_km.toFixed(1)} km`;
     document.querySelector('#itinerary-total-planned').textContent = `${Math.round(aggregate.planned_event_time_sec / 60)}分`;
     status.textContent = '';
-    renderItinerary(aggregate);
+    if (preservePointDom) updateItineraryClocks(aggregate);
+    else renderItinerary(aggregate);
     updateCalculation(document.querySelector('#destination-result'), renderDestinationResult(result, {
       departure_time: clockText(aggregate.departure_epoch_sec, aggregate.departure_epoch_sec),
       epoch: aggregate.departure_epoch_sec,
@@ -1941,7 +1978,44 @@ document.querySelector('#itinerary-points').addEventListener('click', event => {
   itineraryState.points.splice(removed, 1);
   recalculateItinerary();
 });
+function commitItineraryClock(input) {
+  const point = lastItineraryAggregate?.points.find(item => item.point_id === input.dataset.pointId);
+  const reference = point?.[`${input.dataset.pointTime}_epoch_sec`]
+    ?? itineraryState.anchor.epoch_sec;
+  itineraryState.anchor = { point_id: input.dataset.pointId,
+    kind: input.dataset.pointTime,
+    epoch_sec: epochForEditedClock(input.value, reference) };
+  input.dataset.clockCommittedValue = input.value;
+  recalculateItinerary(false, true);
+}
+document.querySelector('#itinerary-form').addEventListener('focusin', event => {
+  if (!event.target.dataset.pointTime) return;
+  if (itineraryClockDraft?.input !== event.target) {
+    delete event.target.dataset.clockCommittedValue;
+    itineraryClockDraft = { input: event.target, initialValue: event.target.value };
+  }
+});
+document.querySelector('#itinerary-form').addEventListener('input', event => {
+  if (!event.target.dataset.pointTime) return;
+  // Native time pickers may emit once per edited column. Keep this focused draft in place.
+});
+document.querySelector('#itinerary-form').addEventListener('focusout', event => {
+  if (!event.target.dataset.pointTime || itineraryClockDraft?.input !== event.target) return;
+  const changed = event.target.value !== itineraryClockDraft.initialValue;
+  itineraryClockDraft = null;
+  if (changed) commitItineraryClock(event.target);
+});
 document.querySelector('#itinerary-form').addEventListener('change', event => {
+  if (event.target.dataset.pointTime) {
+    const alreadyCommitted = event.target.dataset.clockCommittedValue === event.target.value
+      && itineraryState.anchor.point_id === event.target.dataset.pointId
+      && itineraryState.anchor.kind === event.target.dataset.pointTime;
+    if (document.activeElement !== event.target
+        && !alreadyCommitted) {
+      commitItineraryClock(event.target);
+    }
+    return;
+  }
   const card = event.target.closest('[data-point-id]');
   if (card && event.target.dataset.pointField) {
     const point = itineraryState.points.find(item => item.point_id === (event.target.dataset.targetPointId || card.dataset.pointId));
@@ -1951,14 +2025,6 @@ document.querySelector('#itinerary-form').addEventListener('change', event => {
     else if (field === 'leg_distance_km') point.leg_distance_km = Number(event.target.value);
     else if (field === 'stay_duration_sec') point.stay_duration_sec = Number(event.target.value);
     else point[field] = event.target.value === '' ? '' : Number(event.target.value);
-  }
-  if (event.target.dataset.pointTime) {
-    const point = lastItineraryAggregate?.points.find(item => item.point_id === event.target.dataset.pointId);
-    const reference = point?.[`${event.target.dataset.pointTime}_epoch_sec`]
-      ?? itineraryState.anchor.epoch_sec;
-    itineraryState.anchor = { point_id: event.target.dataset.pointId,
-      kind: event.target.dataset.pointTime,
-      epoch_sec: epochForEditedClock(event.target.value, reference) };
   }
   recalculateItinerary();
 });

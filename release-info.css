@@ -1,5 +1,5 @@
 .buffer-event input[type=checkbox] {
-  accent-color:var(--other)
+  accent-color:var(--unexpected)
 }
 
 .version-panel {
@@ -298,7 +298,7 @@
   fill:var(--other)
 }
 .unexpected-fill {
-  fill:#9a4b15
+  fill:var(--unexpected)
 }
 .planned-fill {
   fill:var(--planned)
@@ -338,7 +338,7 @@
   background:var(--other)
 }
 .allocation-legend .unexpected span {
-  background:#9a4b15
+  background:var(--unexpected)
 }
 .allocation-legend .planned span {
   background:var(--planned)
@@ -348,7 +348,7 @@
   background:var(--other)
 }
 .unexpected .icon {
-  background:#9a4b15
+  background:var(--unexpected)
 }
 .planned .icon {
   background:var(--planned)
