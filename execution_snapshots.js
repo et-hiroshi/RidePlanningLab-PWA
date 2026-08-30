@@ -1,4 +1,4 @@
-export const APP_VERSION='ride-planning-ui-v35';
+export const APP_VERSION='ride-planning-ui-v36';
 export const SNAPSHOT_SCHEMA_VERSION='ride-plan-execution-snapshot-v1';
 export const ITINERARY_SNAPSHOT_SCHEMA_VERSION='ride-plan-execution-snapshot-v2';
 export const SNAPSHOT_RECORD_TYPE='ride_plan_execution_snapshot';
@@ -55,7 +55,7 @@ export function validateExecutionSnapshot(record){
     if(!itinerary.anchor||!ids.has(itinerary.anchor.point_id)||!['departure','arrival'].includes(itinerary.anchor.kind))throw new Error('行程anchorが不正です。');
     requireNonnegative(itinerary.anchor.epoch_sec,'anchor時刻');
     const anchorIndex=itinerary.points.findIndex(point=>point.point_id===itinerary.anchor.point_id);
-    if((anchorIndex===0)!==(itinerary.anchor.kind==='departure'))throw new Error('行程anchor種別が不正です。');
+    if((anchorIndex===0&&itinerary.anchor.kind!=='departure')||(anchorIndex===itinerary.points.length-1&&itinerary.anchor.kind!=='arrival'))throw new Error('行程anchor種別が不正です。');
     if(!Array.isArray(itinerary.legs)||itinerary.legs.length!==itinerary.points.length-1)throw new Error('行程区間が不正です。');
     itinerary.legs.forEach((leg,index)=>{['distance_km','moving_time_sec','natural_stop_time_sec','travel_time_sec'].forEach(key=>requireNonnegative(leg?.[key],`区間 ${key}`));if(leg.from_point_id!==itinerary.points[index].point_id||leg.to_point_id!==itinerary.points[index+1].point_id||Math.abs(leg.distance_km-itinerary.points[index+1].leg_distance_km)>1e-6||Math.abs(leg.travel_time_sec-leg.moving_time_sec-leg.natural_stop_time_sec)>1e-6)throw new Error('行程区間の整合性が不正です。')});
     const sum=key=>itinerary.legs.reduce((total,leg)=>total+leg[key],0),stay=itinerary.points.reduce((total,point)=>total+point.stay_duration_sec,0),eventTotal=input.planned_events.reduce((total,event)=>total+event.planned_duration_sec,0);

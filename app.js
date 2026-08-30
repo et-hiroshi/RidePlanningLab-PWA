@@ -1,5 +1,5 @@
-import {ARTIFACT_SCHEMA_VERSION, RUNTIME_VERSION, estimateDestination, estimateDistance, validateArtifact} from './runtime/ride_planning_runtime.js?v=ride-planning-ui-v35';
-import {APP_VERSION, CALCULATION_CONTRACT_VERSION, appendExecutionSnapshot, createExecutionSnapshot, deleteAllExecutionSnapshots, deleteExecutionSnapshot, executionSnapshotsFilename, executionSnapshotsJsonl, loadExecutionSnapshots, sameExecutionSnapshotContent} from './execution_snapshots.js?v=ride-planning-ui-v35';
+import {ARTIFACT_SCHEMA_VERSION, RUNTIME_VERSION, estimateDestination, estimateDistance, validateArtifact} from './runtime/ride_planning_runtime.js?v=ride-planning-ui-v36';
+import {APP_VERSION, CALCULATION_CONTRACT_VERSION, appendExecutionSnapshot, createExecutionSnapshot, deleteAllExecutionSnapshots, deleteExecutionSnapshot, executionSnapshotsFilename, executionSnapshotsJsonl, loadExecutionSnapshots, sameExecutionSnapshotContent} from './execution_snapshots.js?v=ride-planning-ui-v36';
 
 const presets = [
   ['collection', 'カード収集', 10, true],
@@ -1142,8 +1142,9 @@ function calculateItinerary(rawPoints, anchor, predictBase, reserveSec = 0) {
     throw new Error('行程ポイントIDが不正です。');
   }
   const anchorIndex = points.findIndex(point => point.point_id === anchor?.point_id);
-  const allowedKind = anchorIndex === 0 ? 'departure' : 'arrival';
-  if (anchorIndex < 0 || anchor?.kind !== allowedKind || !Number.isFinite(anchor.epoch_sec)) {
+  const allowedKinds = anchorIndex === 0 ? ['departure']
+    : anchorIndex === points.length - 1 ? ['arrival'] : ['arrival', 'departure'];
+  if (anchorIndex < 0 || !allowedKinds.includes(anchor?.kind) || !Number.isFinite(anchor.epoch_sec)) {
     throw new Error('固定時刻が不正です。');
   }
   let cumulative = 0;
@@ -1164,11 +1165,15 @@ function calculateItinerary(rawPoints, anchor, predictBase, reserveSec = 0) {
     return leg;
   });
   const times = points.map(() => ({}));
-  if (anchorIndex === 0) times[0].departure_epoch_sec = anchor.epoch_sec;
-  else times[anchorIndex].arrival_epoch_sec = anchor.epoch_sec;
+  if (anchor.kind === 'departure') {
+    times[anchorIndex].departure_epoch_sec = anchor.epoch_sec;
+    if (anchorIndex > 0) {
+      times[anchorIndex].arrival_epoch_sec = anchor.epoch_sec - points[anchorIndex].stay_duration_sec;
+    }
+  } else times[anchorIndex].arrival_epoch_sec = anchor.epoch_sec;
   for (let index = anchorIndex; index < points.length - 1; index += 1) {
-    const departure = index === 0 ? times[index].departure_epoch_sec
-      : times[index].arrival_epoch_sec + points[index].stay_duration_sec;
+    const departure = times[index].departure_epoch_sec
+      ?? times[index].arrival_epoch_sec + points[index].stay_duration_sec;
     times[index].departure_epoch_sec = departure;
     times[index + 1].arrival_epoch_sec = departure + legs[index].travel_time_sec;
   }
@@ -1756,17 +1761,22 @@ function renderItinerary(aggregate = null) {
     const middle = index > 0 && index < itineraryState.points.length - 1;
     const calculated = aggregate?.points[index];
     const nextPoint = itineraryState.points[index + 1];
-    const anchor = itineraryState.anchor.point_id === point.point_id;
-    const anchorMark = anchor ? '<small class="anchor-mark">指定</small>' : '';
-    const arrivalClock = calculated ? clockText(calculated.arrival_epoch_sec, aggregate.departure_epoch_sec) : '';
+    const anchor = kind => itineraryState.anchor.point_id === point.point_id
+      && itineraryState.anchor.kind === kind;
+    const anchorMark = kind => anchor(kind) ? '<small class="anchor-mark">指定</small>' : '';
+    const arrivalClock = index > 0 && calculated
+      ? clockText(calculated.arrival_epoch_sec, aggregate.departure_epoch_sec) : '';
     const dayOffset = arrivalClock.replace(/\d{2}:\d{2}$/, '').trim();
-    const arrival = index > 0 ? `<label>到着時刻 ${anchorMark}<input class="itinerary-time-input" type="time" data-point-time="arrival" data-point-id="${point.point_id}" value="${calculated ? timeValue(calculated.arrival_epoch_sec) : ''}">${dayOffset ? `<small class="day-offset">${dayOffset}</small>` : ''}</label>` : '';
+    const departureClock = middle && calculated
+      ? clockText(calculated.departure_epoch_sec, aggregate.departure_epoch_sec) : '';
+    const departureDayOffset = departureClock.replace(/\d{2}:\d{2}$/, '').trim();
+    const arrival = index > 0 ? `<label>到着時刻 ${anchorMark('arrival')}<input class="itinerary-time-input" type="time" data-point-time="arrival" data-point-id="${point.point_id}" value="${calculated ? timeValue(calculated.arrival_epoch_sec) : ''}">${dayOffset ? `<small class="day-offset">${dayOffset}</small>` : ''}</label>` : '';
     const departure = index === 0
-      ? `<label>出発時刻 ${anchorMark}<input class="itinerary-time-input" type="time" data-point-time="departure" data-point-id="${point.point_id}" value="${calculated ? timeValue(calculated.departure_epoch_sec) : timeValue(itineraryState.anchor.epoch_sec)}"></label>`
-      : middle ? `<label>出発時刻<div class="itinerary-clock">${calculated ? clockText(calculated.departure_epoch_sec, aggregate.departure_epoch_sec) : '—'}</div></label>` : '';
+      ? `<label>出発時刻 ${anchorMark('departure')}<input class="itinerary-time-input" type="time" data-point-time="departure" data-point-id="${point.point_id}" value="${calculated ? timeValue(calculated.departure_epoch_sec) : timeValue(itineraryState.anchor.epoch_sec)}"></label>`
+      : middle ? `<label>出発時刻 ${anchorMark('departure')}<input class="itinerary-time-input" type="time" data-point-time="departure" data-point-id="${point.point_id}" value="${calculated ? timeValue(calculated.departure_epoch_sec) : ''}">${departureDayOffset ? `<small class="day-offset">${departureDayOffset}</small>` : ''}</label>` : '';
     return `<article class="itinerary-point" data-point-id="${point.point_id}">${middle ? `<div class="itinerary-name-row"><input maxlength="60" aria-label="店名・地点名（任意）" data-point-field="name" value="${escapeHtml(point.name)}" placeholder="店名・地点名（任意）"><button type="button" class="itinerary-remove" data-remove-point="${point.point_id}">削除</button></div>` : `<strong class="endpoint-label">${index === 0 ? '出発' : '到着'}</strong>`}
       <div class="itinerary-times">${arrival}${middle ? `<label>滞在種別${eventTypePicker(point)}</label>` : ''}${departure}${middle ? `<label>滞在時間${stayPicker(point)}</label>` : ''}</div>
-      ${nextPoint ? `<div class="itinerary-leg"><label>次の地点までの区間距離${distancePicker(nextPoint)}</label><span>↓</span></div>` : ''}</article>`;
+      ${nextPoint ? `<div class="itinerary-leg"><label>次の地点までの区間距離${distancePicker(nextPoint)}</label></div>` : ''}</article>`;
   }).join('');
   document.querySelector('#add-itinerary-point').disabled = itineraryState.points.length >= MAX_ITINERARY_POINTS;
 }
