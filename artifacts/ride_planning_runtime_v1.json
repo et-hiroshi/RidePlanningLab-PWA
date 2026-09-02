@@ -1,8 +1,10 @@
 {
   "limitation_codes": [
+    "150km_plus_evidence_is_sparse",
     "component_interval_is_empirical_not_safety_guarantee",
     "episode_reconstruction_is_approximate",
-    "rollback_operational_teacher_release_active",
+    "independent_holdout_not_available",
+    "release2_position_propagation_human_validated",
     "unexpected_default_is_user_editable_20_minutes"
   ],
   "moving": {
@@ -18,10 +20,10 @@
     },
     "high_rate_transition_end_km": null,
     "high_rate_transition_start_km": null,
-    "high_sec_per_km": 39.492434593742985,
+    "high_sec_per_km": 38.21530613244449,
     "long_distance_runtime_policy": "pooled_rate_from_60km_no_100_or_150km_switch_v1",
-    "long_sec_per_km": 39.492434593742985,
-    "low_sec_per_km": 21.627188465499483,
+    "long_sec_per_km": 38.21530613244449,
+    "low_sec_per_km": 19.19932928107315,
     "minimum_band_samples": 10,
     "model": "pooled_50plus_rate_with_40_60_smoothing",
     "sample_count_by_band": {
@@ -42,44 +44,45 @@
     "upper_bound_km": 500.0
   },
   "source_identity": {
-    "model_version": "prediction-natural-release1-human-v1",
+    "model_version": "prediction-natural-release2-position-v1",
     "natural_actual_contract": "session-nonmoving-minus-confirmed-planned-then-per-stop-episode-10min-cap-v2",
-    "operational_release_id": "prediction-natural-release1-human-v1",
+    "operational_release_id": "prediction-natural-release2-position-v1",
     "operational_release_schema": "ride-planning-pwa-operational-artifact-v1",
-    "operational_release_sha256": "84ba45276fbd84855d43fdaa478aa9ec9310bef0b678c65c8bfb202e237ed14f",
+    "operational_release_sha256": "48bdbb8ab9d763b32112c72f9691acfb9371f2d45791740df5fd57034d010722",
     "practical_artifact_version": "practical-ride-time-estimator-v2.0.0",
     "practical_dataset": "sha256:b5635d9f90d35b37878a7ed02ceaf2f2289c92ad2119a631d245eb890d950561",
     "r059_result": "not_applicable",
-    "rollback_release_id": "prediction-natural-teacher-v10-empirical-continuous-v1",
-    "teacher_contract": "RELEASE1_HUMAN_CONFIRMED_PURIFICATION_V1",
-    "teacher_version": "release1-teacher-human-confirmed-v1"
+    "rollback_release_id": "prediction-natural-release1-human-v1",
+    "teacher_contract": "RELEASE2_POSITION_PROPAGATION_V1",
+    "teacher_version": "release2-teacher-position-propagation-v1"
   },
   "uncertainty": {
     "anchors": [
       {
-        "distance_km": 15.5185,
+        "distance_km": 15.351,
         "fallback_source": "distance_band",
-        "p10_sec": -914.4809686902918,
-        "p90_sec": 489.11250390811983,
-        "sample_count": 492
+        "p10_sec": -542.2364740070989,
+        "p90_sec": 896.7276936704252,
+        "sample_count": 521
       },
       {
-        "distance_km": 69.809,
+        "distance_km": 69.7115,
         "fallback_source": "distance_band",
-        "p10_sec": -2145.7367119919036,
-        "p90_sec": 1620.4311035763312,
-        "sample_count": 103
+        "p10_sec": -1526.9074671273531,
+        "p90_sec": 1935.7505085395678,
+        "sample_count": 104
       },
       {
         "distance_km": 126.17,
         "fallback_source": "distance_band",
-        "p10_sec": -1838.9321185989393,
-        "p90_sec": 2495.6728636167354,
+        "p10_sec": -2120.9620370844245,
+        "p90_sec": 2065.834385668735,
         "sample_count": 52
       }
     ],
-    "interval_version": "release1-three-band-component-residual-p10-p90-v1",
+    "interval_version": "release2-interval-p10-p90-v1",
     "long_distance_warning_km": 150,
+    "probability_guarantee": false,
     "quantile_levels": [
       0.1,
       0.9
