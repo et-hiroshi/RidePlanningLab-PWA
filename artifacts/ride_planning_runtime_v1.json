@@ -1,9 +1,8 @@
 {
   "limitation_codes": [
-    "150km_plus_evidence_is_sparse",
     "component_interval_is_empirical_not_safety_guarantee",
     "episode_reconstruction_is_approximate",
-    "teacher_v10_empirical_natural_rates",
+    "rollback_operational_teacher_release_active",
     "unexpected_default_is_user_editable_20_minutes"
   ],
   "moving": {
@@ -17,18 +16,18 @@
       "50_to_100_km": false,
       "under_50_km": false
     },
-    "high_rate_transition_end_km": 150,
-    "high_rate_transition_start_km": 60,
-    "high_sec_per_km": 41.207545165702584,
-    "long_distance_runtime_policy": "teacher_v10_linear_empirical_rate_60_to_150_v1",
-    "long_sec_per_km": 45.427810368131524,
-    "low_sec_per_km": 26.647695758072686,
+    "high_rate_transition_end_km": null,
+    "high_rate_transition_start_km": null,
+    "high_sec_per_km": 39.492434593742985,
+    "long_distance_runtime_policy": "pooled_rate_from_60km_no_100_or_150km_switch_v1",
+    "long_sec_per_km": 39.492434593742985,
+    "low_sec_per_km": 21.627188465499483,
     "minimum_band_samples": 10,
-    "model": "linear_rate_transition_40_60_then_60_150",
+    "model": "pooled_50plus_rate_with_40_60_smoothing",
     "sample_count_by_band": {
       "100_km_and_over": 52,
-      "50_to_100_km": 104,
-      "under_50_km": 521
+      "50_to_100_km": 103,
+      "under_50_km": 492
     },
     "transition_end_km": 60,
     "transition_start_km": 40
@@ -43,43 +42,43 @@
     "upper_bound_km": 500.0
   },
   "source_identity": {
-    "model_version": "prediction-natural-teacher-v10-empirical-continuous-v1",
+    "model_version": "prediction-natural-release1-human-v1",
     "natural_actual_contract": "session-nonmoving-minus-confirmed-planned-then-per-stop-episode-10min-cap-v2",
-    "operational_release_id": "prediction-natural-teacher-v10-empirical-continuous-v1",
+    "operational_release_id": "prediction-natural-release1-human-v1",
     "operational_release_schema": "ride-planning-pwa-operational-artifact-v1",
-    "operational_release_sha256": "d665ab4ab6c5334baab8e25d3a08a337b076178f8f5ae50e5155197eda01e747",
+    "operational_release_sha256": "84ba45276fbd84855d43fdaa478aa9ec9310bef0b678c65c8bfb202e237ed14f",
     "practical_artifact_version": "practical-ride-time-estimator-v2.0.0",
     "practical_dataset": "sha256:b5635d9f90d35b37878a7ed02ceaf2f2289c92ad2119a631d245eb890d950561",
     "r059_result": "not_applicable",
-    "rollback_release_id": "prediction-natural-pooled-50plus-v1",
-    "teacher_contract": "CURRENT_PRACTICAL_NATURAL",
-    "teacher_version": "teacher-stage1-parser-1.7.3-s1-stop-positive-v1-human-v10"
+    "rollback_release_id": "prediction-natural-teacher-v10-empirical-continuous-v1",
+    "teacher_contract": "RELEASE1_HUMAN_CONFIRMED_PURIFICATION_V1",
+    "teacher_version": "release1-teacher-human-confirmed-v1"
   },
   "uncertainty": {
     "anchors": [
       {
-        "distance_km": 15.351,
+        "distance_km": 15.5185,
         "fallback_source": "distance_band",
-        "p10_sec": -533.818108569661,
-        "p90_sec": 1158.500422006604,
-        "sample_count": 521
+        "p10_sec": -914.4809686902918,
+        "p90_sec": 489.11250390811983,
+        "sample_count": 492
       },
       {
-        "distance_km": 69.7115,
+        "distance_km": 69.809,
         "fallback_source": "distance_band",
-        "p10_sec": -1498.5542021417446,
-        "p90_sec": 2316.9883069103253,
-        "sample_count": 104
+        "p10_sec": -2145.7367119919036,
+        "p90_sec": 1620.4311035763312,
+        "sample_count": 103
       },
       {
         "distance_km": 126.17,
         "fallback_source": "distance_band",
-        "p10_sec": -2639.5508223963043,
-        "p90_sec": 1610.490055638008,
+        "p10_sec": -1838.9321185989393,
+        "p90_sec": 2495.6728636167354,
         "sample_count": 52
       }
     ],
-    "interval_version": "teacher-v10-three-band-component-residual-p10-p90-v1",
+    "interval_version": "release1-three-band-component-residual-p10-p90-v1",
     "long_distance_warning_km": 150,
     "quantile_levels": [
       0.1,

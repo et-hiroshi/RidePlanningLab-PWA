@@ -1,17 +1,17 @@
 {
   "app_identity": "ride-planning-lab",
   "app_name": "Ride Planning Lab",
-  "artifact_sha256": "3ae49730e1739341fd59aeb19617b6591f79a13ffbdd76bf0442988bb29684ec",
-  "build_at": "2026-08-31T22:47:57+09:00",
+  "artifact_sha256": "68d0b07a584b63f28d46a89ba2792c4a8473ab3014fe44f9531345af398e0eee",
+  "build_at": "2026-08-31T23:25:34+09:00",
   "bundle_schema": "ride-planning-lab-pwa-bundle-v1",
-  "cache_id": "ride-planning-lab-196cb68723058d89",
+  "cache_id": "ride-planning-lab-2965d59b6e64521f",
   "files": {
     ".nojekyll": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "_headers": "9aef9259b0745e6c31aba97bc1fd59aed0345776afcf9e05f313eb2caf05ac93",
     "app.js": "47ae589c0846d3de57497547bad6584c0029571786cba03510d79d9fb18883b9",
     "apple-touch-icon.png": "dea6d0cdc5553b0796a748b331d92b7782d347e66e3bc2f5f2388cb2654d43f0",
-    "artifacts/ride_planning_runtime_v1.json": "3ae49730e1739341fd59aeb19617b6591f79a13ffbdd76bf0442988bb29684ec",
-    "build-info.json": "eb5bbc66db701eaa69ad53c693ad5f34bfcf1e02e8c599ddf438c0e227b552bb",
+    "artifacts/ride_planning_runtime_v1.json": "68d0b07a584b63f28d46a89ba2792c4a8473ab3014fe44f9531345af398e0eee",
+    "build-info.json": "e3c56f3722a92766e65aad4892b1c00dfcfef0efa79f2d0b75bde6d1f2233f09",
     "execution_snapshots.js": "61435054b197e9cb1837c34c674595c371a6c394feb6fdd820ea5bd989b27251",
     "icon-192.png": "85c472b3b016f91b914c643b74ebe203f645653b4b7af594adc549fc31a11113",
     "icon-512.png": "58232114f499b870952cb202c80859ede732012bfe9f0469c53576f2befaa529",
@@ -19,11 +19,11 @@
     "manifest.webmanifest": "d21a2b145385c824d070c4b3f559e042d9b5950af725fed39db8e7696626301f",
     "release-info.css": "8d74a940ffe93af4805531576cefc2c2cea785af1891968723a3351e329f751d",
     "runtime/ride_planning_runtime.js": "85440f26890d5ab960a8858ec1ea5173bfa0b9c44ca78bbc51922b06536aa68c",
-    "service-worker.js": "27594018123dac42e42dda6218a8789704928666d86e968e86ce08738b389057",
+    "service-worker.js": "f6be897d74a4048049eea8a5ec502bfd560e3b5c5fdf48981f1f0f25a9a469dc",
     "style.css": "0cf158fa6ce28465aaccdaa39d4a08e2f8748896c3c77aa3fb773bebd6771f19"
   },
   "runtime_version": "mobile-ride-planning-practical-runtime-v7",
   "service_worker_version": "ride-planning-service-worker-v3",
-  "ui_commit": "cfb00c0cc920166c901b01f30b2763154a06d7fe",
+  "ui_commit": "cb91afea71e7cb1a24513f57b1507ddadece1cbf",
   "ui_version": "ride-planning-ui-v37"
 }
