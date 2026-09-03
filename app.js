@@ -1,5 +1,5 @@
-import {ARTIFACT_SCHEMA_VERSION, RUNTIME_VERSION, estimateDestination, estimateDistance, validateArtifact} from './runtime/ride_planning_runtime.js?v=ride-planning-ui-v37';
-import {APP_VERSION, CALCULATION_CONTRACT_VERSION, appendExecutionSnapshot, createExecutionSnapshot, deleteAllExecutionSnapshots, deleteExecutionSnapshot, executionSnapshotsFilename, executionSnapshotsJsonl, loadExecutionSnapshots, sameExecutionSnapshotContent} from './execution_snapshots.js?v=ride-planning-ui-v37';
+import {ARTIFACT_SCHEMA_VERSION, RUNTIME_VERSION, estimateDestination, estimateDistance, validateArtifact} from './runtime/ride_planning_runtime.js?v=ride-planning-ui-v38';
+import {APP_VERSION, CALCULATION_CONTRACT_VERSION, appendExecutionSnapshot, createExecutionSnapshot, deleteAllExecutionSnapshots, deleteExecutionSnapshot, executionSnapshotsFilename, executionSnapshotsJsonl, loadExecutionSnapshots, sameExecutionSnapshotContent} from './execution_snapshots.js?v=ride-planning-ui-v38';
 
 const presets = [
   ['collection', 'カード収集', 10, true],
@@ -922,27 +922,76 @@ async function renderServiceWorkerInfo(registration) {
   }
 }
 
-async function waitForWaiting(registration, timeout = 5000) {
+async function requestUpdateCandidate(registration, timeout = 15000) {
   if (registration.waiting) return registration.waiting;
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      if (registration.installing) reject(new Error('新しいbundleの取得が完了しませんでした。'));
-      else resolve(registration.waiting);
-    }, timeout);
-    const installing = registration.installing;
-    if (!installing) {
+    const initialActive = registration.active;
+    const watched = new Set();
+    let lifecycleStarted = false;
+    let settled = false;
+    let settleTimer;
+    const timer = setTimeout(() => finish(
+      new Error(lifecycleStarted
+        ? '新しいbundleの取得が完了しませんでした。'
+        : 'Service Workerの更新確認がタイムアウトしました。')),
+    timeout);
+
+    function cleanup() {
       clearTimeout(timer);
-      resolve(null);
-      return;
+      clearTimeout(settleTimer);
+      registration.removeEventListener('updatefound', inspect);
     }
-    installing.addEventListener('statechange', () => {
-      if (installing.state === 'installed') {
-        clearTimeout(timer);
-        resolve(registration.waiting);
-      } else if (installing.state === 'redundant') {
-        clearTimeout(timer);
-        reject(new Error('新しいbundleを完全に取得できませんでした。'));
+
+    function finish(error, worker) {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      if (error) reject(error);
+      else resolve(worker || null);
+    }
+
+    function watch(worker) {
+      if (!worker || watched.has(worker)) return;
+      watched.add(worker);
+      lifecycleStarted = true;
+      const inspectState = () => {
+        if (worker.state === 'installed' || worker.state === 'activated') finish(null, worker);
+        else if (worker.state === 'redundant') {
+          finish(new Error('新しいbundleを完全に取得できませんでした。'));
+        }
+      };
+      worker.addEventListener('statechange', inspectState);
+      inspectState();
+    }
+
+    function inspect() {
+      if (registration.waiting) {
+        finish(null, registration.waiting);
+        return;
       }
+      watch(registration.installing);
+      if (registration.active && registration.active !== initialActive) {
+        finish(null, registration.active);
+      }
+    }
+
+    registration.addEventListener('updatefound', inspect);
+    inspect();
+    if (settled || lifecycleStarted) return;
+
+    // Observe updatefound/installing independently. In standalone WebKit,
+    // update() can remain pending even while the new worker is progressing.
+    Promise.resolve().then(() => registration.update()).then(() => {
+      inspect();
+      if (!lifecycleStarted && !settled) {
+        settleTimer = setTimeout(() => {
+          inspect();
+          if (!lifecycleStarted) finish(null, null);
+        }, 100);
+      }
+    }, error => {
+      inspect();
+      if (!lifecycleStarted) finish(error);
     });
   });
 }
@@ -953,21 +1002,43 @@ async function workerVersion(worker) {
   return value;
 }
 
-async function waitForControllerCache(cacheId, timeout = 5000) {
-  const deadline = Date.now() + timeout;
-  while (Date.now() < deadline) {
-    const controller = navigator.serviceWorker.controller;
-    if (controller) {
+async function waitForControllerCache(cacheId, timeout = 15000) {
+  return new Promise((resolve, reject) => {
+    let checking = false;
+    const timer = setTimeout(() => finish(
+      new Error('新しいbundleへの切替を確認できませんでした。')), timeout);
+    const interval = setInterval(check, 100);
+
+    function cleanup() {
+      clearTimeout(timer);
+      clearInterval(interval);
+      navigator.serviceWorker.removeEventListener('controllerchange', check);
+    }
+
+    function finish(error, controller) {
+      cleanup();
+      if (error) reject(error);
+      else resolve(controller);
+    }
+
+    async function check() {
+      if (checking) return;
+      const controller = navigator.serviceWorker.controller;
+      if (!controller) return;
+      checking = true;
       try {
         const value = await workerVersion(controller);
-        if (value.cacheId === cacheId) return controller;
+        if (value.cacheId === cacheId) finish(null, controller);
       } catch (error) {
         // The controller may be changing between generations; retry until the deadline.
+      } finally {
+        checking = false;
       }
     }
-    await new Promise(resolve => setTimeout(resolve, 50));
-  }
-  throw new Error('新しいbundleへの切替を確認できませんでした。');
+
+    navigator.serviceWorker.addEventListener('controllerchange', check);
+    check();
+  });
 }
 
 async function refreshAssets() {
@@ -979,12 +1050,13 @@ async function refreshAssets() {
     if (!('serviceWorker' in navigator)) throw new Error('Service Workerを利用できません。');
     const registration = serviceWorkerRegistration
       || await withTimeout(navigator.serviceWorker.ready, 3000, 'Service Worker登録');
-    await withTimeout(registration.update(), 5000, 'Service Worker更新');
-    const waiting = await waitForWaiting(registration);
+    const updateCandidate = await requestUpdateCandidate(registration);
     let worker = navigator.serviceWorker.controller || registration.active;
-    if (waiting) {
-      const target = await workerVersion(waiting);
-      await workerMessage(waiting, 'ACTIVATE_UPDATE');
+    if (updateCandidate) {
+      const target = await workerVersion(updateCandidate);
+      if (updateCandidate.state !== 'activated') {
+        await workerMessage(updateCandidate, 'ACTIVATE_UPDATE');
+      }
       worker = await waitForControllerCache(target.cacheId);
     }
     const current = await workerVersion(worker);
